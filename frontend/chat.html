@@ -11,7 +11,9 @@
 <link rel="stylesheet" href="/css/style.css" />
 </head>
 <body>
-  <div id="loading" class="loading-screen">Loading…</div>
+  <div id="loading" class="loading-screen" aria-busy="true" aria-label="Loading">
+    <img class="loading-atom" src="/icons/atomic-loading.png" alt="" width="72" height="72" />
+  </div>
 
   <div id="app" class="chat-layout" style="display:none;">
     <div class="sidebar-overlay" id="sidebar-overlay"></div>
@@ -104,7 +106,7 @@
 <div class="messages-wrap" id="messages-wrap">
         <div class="messages-inner" id="messages-inner">
           <div class="empty-state" id="empty-state">
-            <img class="empty-logo" src="/icons/aether-mark-128.png" alt="" />
+            <img class="empty-logo" src="/icons/atomic-128.png" alt="" />
             <p class="empty-title font-display">What's on your mind?</p>
             <p class="empty-sub">Your thoughts, elevated. Ask anything.</p>
             <div class="suggested-prompts" id="suggested-prompts">
