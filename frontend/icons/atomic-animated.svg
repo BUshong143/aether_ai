@@ -1,0 +1,28 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 120 120" width="120" height="120">
+  <defs>
+    <style>
+      .spin-a { transform-origin: 60px 60px; animation: spin 2.8s linear infinite; }
+      .spin-b { transform-origin: 60px 60px; animation: spin 4s linear infinite reverse; }
+      .spin-c { transform-origin: 60px 60px; animation: spin 5.2s linear infinite; }
+      .core { transform-origin: 60px 60px; animation: pulse 1.5s ease-in-out infinite; }
+      @keyframes spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
+      @keyframes pulse {
+        0%, 100% { transform: scale(1); }
+        50% { transform: scale(1.1); }
+      }
+    </style>
+  </defs>
+  <g class="spin-a">
+    <ellipse cx="60" cy="60" rx="44" ry="17" fill="none" stroke="#a8aeb8" stroke-width="3.2"/>
+    <circle cx="104" cy="60" r="5.2" fill="#f3f4f6"/>
+  </g>
+  <g class="spin-b">
+    <ellipse cx="60" cy="60" rx="44" ry="17" fill="none" stroke="#a8aeb8" stroke-width="3.2" transform="rotate(60 60 60)"/>
+    <circle cx="60" cy="60" r="5.2" fill="#f3f4f6" transform="rotate(60 60 60) translate(44 0)"/>
+  </g>
+  <g class="spin-c">
+    <ellipse cx="60" cy="60" rx="44" ry="17" fill="none" stroke="#a8aeb8" stroke-width="3.2" transform="rotate(-60 60 60)"/>
+    <circle cx="60" cy="60" r="5.2" fill="#f3f4f6" transform="rotate(-60 60 60) translate(44 0)"/>
+  </g>
+  <circle class="core" cx="60" cy="60" r="13.5" fill="#c8552d"/>
+</svg>

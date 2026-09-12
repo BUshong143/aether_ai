@@ -909,16 +909,9 @@ body {
   background: transparent;
   pointer-events: none;
 }
-.loading-atom {
-  width: 72px;
-  height: 72px;
-  object-fit: contain;
-  background: transparent;
-  animation: atom-pulse 1.4s ease-in-out infinite;
-}
-@keyframes atom-pulse {
-  0%, 100% { opacity: 0.55; transform: scale(0.92); }
-  50% { opacity: 1; transform: scale(1); }
+
+
+  50% { transform: translateY(-6px); }
 }
 
 /* ---------- Mobile responsive ---------- */
@@ -2144,4 +2137,41 @@ html[data-theme="light"] .model-picker-menu {
 }
 html[data-theme="light"] .model-picker-item {
   color: #1a1a22;
+}
+
+.loading-atom {
+  width: 80px;
+  height: 80px;
+  background: transparent;
+  animation: atom-float 2.4s ease-in-out infinite;
+}
+.loading-atom svg {
+  display: block;
+  width: 80px;
+  height: 80px;
+  overflow: visible;
+}
+.loading-atom .spin-a,
+.loading-atom .spin-b,
+.loading-atom .spin-c {
+  transform-origin: 60px 60px;
+}
+.loading-atom .spin-a { animation: atom-spin 2.8s linear infinite; }
+.loading-atom .spin-b { animation: atom-spin 4s linear infinite reverse; }
+.loading-atom .spin-c { animation: atom-spin 5.2s linear infinite; }
+.loading-atom .core {
+  transform-origin: 60px 60px;
+  animation: atom-core 1.5s ease-in-out infinite;
+}
+@keyframes atom-spin {
+  from { transform: rotate(0deg); }
+  to { transform: rotate(360deg); }
+}
+@keyframes atom-core {
+  0%, 100% { transform: scale(1); }
+  50% { transform: scale(1.12); }
+}
+@keyframes atom-float {
+  0%, 100% { transform: translateY(0); }
+  50% { transform: translateY(-6px); }
 }
