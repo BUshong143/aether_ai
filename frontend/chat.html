@@ -1,0 +1,130 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Aether</title>
+<link rel="icon" href="/favicon.ico" sizes="any" />
+<link rel="icon" type="image/png" sizes="32x32" href="/icons/favicon-32.png" />
+<link rel="icon" type="image/png" sizes="16x16" href="/icons/favicon-16.png" />
+<link rel="apple-touch-icon" href="/icons/apple-touch-icon.png" />
+<link rel="stylesheet" href="/css/style.css" />
+</head>
+<body>
+  <div id="loading" class="loading-screen">Loading…</div>
+
+  <div id="app" class="chat-layout" style="display:none;">
+    <div class="sidebar-overlay" id="sidebar-overlay"></div>
+
+    <aside class="sidebar" id="sidebar">
+      <div class="sidebar-header">
+        <div class="brand">
+          <img class="brand-logo" src="/icon.png" alt="Aether" />
+          <span class="brand-name font-display">Aether</span>
+        </div>
+        <button class="btn-new-chat" id="new-chat-btn">+ New chat</button>
+      </div>
+      <div class="conversation-list" id="conversation-list"></div>
+      <div class="sidebar-footer">
+        <span id="user-email"></span>
+        <a id="sign-out-btn">Sign out</a>
+      </div>
+      <div class="sidebar-credit">Yours Truly Greg Garrido</div>
+    </aside>
+
+    <main class="chat-main">
+      <div class="chat-topbar">
+        <button class="btn-hamburger" id="hamburger-btn" aria-label="Open menu">
+          <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round">
+            <line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="18" x2="21" y2="18"/>
+          </svg>
+        </button>
+        <div class="brand">
+          <img class="brand-logo" src="/icons/aether-mark-64.png" alt="Aether" />
+          <span class="brand-name font-display">Aether</span>
+        </div>
+      </div>
+      <div class="messages-wrap" id="messages-wrap">
+        <div class="messages-inner" id="messages-inner">
+          <div class="empty-state" id="empty-state">
+            <p class="font-display">What's on your mind?</p>
+            <p>Ask anything — I'm running on your own model.</p>
+          </div>
+        </div>
+      </div>
+      <div class="composer">
+        <div class="composer-inner-wrap">
+          <div class="attachment-strip" id="attachment-strip"></div>
+          <div class="composer-inner">
+            <button class="btn-attach" id="attach-btn" title="Attach image or file" type="button">
+              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21.44 11.05l-9.19 9.19a6 6 0 0 1-8.49-8.49l9.19-9.19a4 4 0 0 1 5.66 5.66l-9.2 9.19a2 2 0 0 1-2.83-2.83l8.49-8.48"/></svg>
+            </button>
+            <input type="file" id="file-input" multiple accept="image/*,.txt,.md,.csv,.json,.log,.py,.js,.jsx,.ts,.tsx,.html,.css,.yml,.yaml,.xml,.sql" hidden />
+            <textarea id="message-input" rows="1" placeholder="Message Aether…"></textarea>
+            <div class="model-picker" id="model-picker">
+              <button class="model-picker-btn" id="model-picker-btn" type="button">
+                <span id="model-picker-label">GPT-OSS 120B</span>
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"/></svg>
+              </button>
+              <div class="model-picker-menu" id="model-picker-menu"></div>
+            </div>
+            <button class="btn-send" id="send-btn">Send</button>
+          </div>
+        </div>
+      </div>
+    </main>
+
+    <div class="review-overlay" id="review-overlay"></div>
+    <aside class="review-panel" id="review-panel">
+      <div class="review-header">
+        <div class="review-title">
+          <span class="review-project-name" id="review-project-name">Project review</span>
+        </div>
+        <div class="review-actions">
+          <button class="icon-btn-sm" id="review-download-all-btn" title="Download all files">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+          </button>
+          <button class="icon-btn-sm" id="review-close-btn" title="Close">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+          </button>
+        </div>
+      </div>
+
+      <div class="review-tabs">
+        <button class="review-tab active" id="review-tab-preview" data-tab="preview">Preview</button>
+        <button class="review-tab" id="review-tab-files" data-tab="files">Files</button>
+      </div>
+
+      <div class="review-body">
+        <div class="review-pane" id="review-pane-preview">
+          <iframe class="review-iframe" id="review-iframe" sandbox="allow-scripts allow-modals allow-forms" title="Live preview"></iframe>
+          <div class="review-no-preview" id="review-no-preview" style="display:none;">
+            No previewable HTML in this response — check the Files tab.
+          </div>
+        </div>
+
+        <div class="review-pane" id="review-pane-files" style="display:none;">
+          <div class="review-file-list" id="review-file-list"></div>
+          <div class="review-file-view" id="review-file-view">
+            <div class="review-file-view-header">
+              <span class="review-lang-badge" id="review-lang-badge">TXT</span>
+              <span class="review-filename" id="review-filename">Select a file</span>
+              <div class="review-file-actions">
+                <button class="icon-btn-sm" id="review-copy-btn" title="Copy">
+                  <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>
+                </button>
+                <button class="icon-btn-sm" id="review-download-btn" title="Download this file">
+                  <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+                </button>
+              </div>
+            </div>
+            <pre class="review-code"><code id="review-code-content"></code></pre>
+          </div>
+        </div>
+      </div>
+    </aside>
+  </div>
+
+  <script src="/js/chat.js"></script>
+</body>
+</html>
