@@ -15,8 +15,6 @@ let resetToken = "";
 let resendCooldown = 0;
 let resendTimer = null;
 
-// --- Step 1: request OTP ---
-
 const emailForm = document.getElementById("email-form");
 const emailInput = document.getElementById("email");
 const emailError = document.getElementById("email-error");
@@ -62,8 +60,6 @@ emailForm.addEventListener("submit", async (e) => {
     emailSubmit.textContent = "Send code";
   }
 });
-
-// --- Step 2: verify OTP ---
 
 const otpForm = document.getElementById("otp-form");
 const otpInputs = Array.from(document.querySelectorAll("#otp-inputs input"));
@@ -130,7 +126,7 @@ otpForm.addEventListener("submit", async (e) => {
     }
 
     resetToken = data.resetToken;
-    // Confirmed — go straight to the create-new-password step.
+    
     document.getElementById("password-error").textContent = "";
     document.getElementById("new-password").value = "";
     document.getElementById("confirm-password").value = "";
@@ -176,8 +172,6 @@ resendBtn.addEventListener("click", async () => {
     otpError.textContent = err.message || "Couldn't reach the server.";
   }
 });
-
-// --- Step 3: set new password ---
 
 const passwordForm = document.getElementById("password-form");
 const passwordError = document.getElementById("password-error");

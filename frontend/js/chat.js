@@ -46,12 +46,11 @@ const userNameEl = document.getElementById("user-name");
 const userAvatarEl = document.getElementById("user-avatar");
 const navChats = document.getElementById("nav-chats");
 
-
 let activeId = null;
 let streaming = false;
 let userInitial = "U";
 let abortController = null;
-let lastUserMessage = null; // { text, attachments } for regenerate
+let lastUserMessage = null; 
 let currentUser = null;
 
 let models = [];
@@ -59,7 +58,7 @@ let selectedModelId = localStorage.getItem("aether_model") || null;
 let selectedEffort = localStorage.getItem("aether_effort") || "medium";
 let effortSubmenuOpen = false;
 let moreModelsOpen = false;
-let pendingAttachments = []; // [{kind:"image", name, mime, dataUrl} | {kind:"file", name, mime, text}]
+let pendingAttachments = []; 
 
 const FILE_ICON = `<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>`;
 const CLOSE_ICON = `<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>`;
@@ -70,7 +69,6 @@ const TRASH_ICON = `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" 
 const TEXTY_EXT = /\.(txt|md|markdown|csv|json|log|py|js|jsx|ts|tsx|html|htm|css|yml|yaml|xml|sql|c|cpp|h|java|go|rb|php|sh|toml|ini|env)$/i;
 const PDF_EXT = /\.pdf$/i;
 
-// Review panel elements
 const reviewPanel = document.getElementById("review-panel");
 const reviewOverlay = document.getElementById("review-overlay");
 const reviewProjectName = document.getElementById("review-project-name");
@@ -89,7 +87,7 @@ const reviewTabFiles = document.getElementById("review-tab-files");
 const reviewPanePreview = document.getElementById("review-pane-preview");
 const reviewPaneFiles = document.getElementById("review-pane-files");
 
-let currentProject = null; // { files: [{lang, ext, filename, content}], html } 
+let currentProject = null; 
 let currentReviewFile = null;
 let fileCounter = 0;
 
@@ -108,9 +106,6 @@ function extForLang(lang) {
   return EXT_MAP[key] || (key || "txt");
 }
 
-// Deterministic seed from the prompt text so the same prompt renders the
-// same image every time (e.g. on page reload), instead of a new random
-// image each render.
 function hashSeed(str) {
   let hash = 0;
   for (let i = 0; i < str.length; i++) {
@@ -119,7 +114,7 @@ function hashSeed(str) {
   return hash % 1000000;
 }
 
-const documentBlockStore = new Map(); // id -> { format, title, sections }
+const documentBlockStore = new Map(); 
 let documentBlockSeq = 0;
 
 const DOC_FORMAT_INFO = {
@@ -203,7 +198,7 @@ async function copyText(text) {
     await navigator.clipboard.writeText(text);
     return true;
   } catch (err) {
-    // Fallback for browsers/contexts without clipboard API access
+    
     const ta = document.createElement("textarea");
     ta.value = text;
     ta.style.position = "fixed";
@@ -213,7 +208,7 @@ async function copyText(text) {
     try {
       document.execCommand("copy");
     } catch (e) {
-      /* ignore */
+      
     }
     document.body.removeChild(ta);
     return true;
@@ -249,9 +244,6 @@ function downloadText(content, ext) {
   return filename;
 }
 
-// Builds a single runnable HTML document out of whatever combination of
-// html/css/js files exist in the project, so the review panel can show a
-// real live preview of the complete generated UI rather than raw code.
 function buildPreviewDocument(files) {
   const htmlFile = files.find((f) => f.ext === "html");
   const cssFiles = files.filter((f) => f.ext === "css");
@@ -266,7 +258,7 @@ function buildPreviewDocument(files) {
   const hasFullDoc = /<html[\s>]/i.test(doc);
 
   if (!hasFullDoc) {
-    // Fragment only (e.g. just a <div> or <section>) — wrap it into a full page.
+    
     doc = `<!DOCTYPE html><html><head><meta charset="UTF-8"></head><body>${doc}</body></html>`;
   }
 
@@ -311,9 +303,6 @@ function switchReviewTab(tab) {
 reviewTabPreview.addEventListener("click", () => switchReviewTab("preview"));
 reviewTabFiles.addEventListener("click", () => switchReviewTab("files"));
 
-// Opens the review panel for a whole project (all code blocks belonging to
-// one assistant message), defaulting to a live rendered preview when the
-// project contains HTML, falling back to the Files tab otherwise.
 function openReviewPanel(files, label) {
   const namedFiles = files.map((f, i) => ({ ...f, filename: fileLabel(f, i, files) }));
   currentProject = { files: namedFiles };
@@ -364,8 +353,8 @@ reviewDownloadBtn.addEventListener("click", () => {
 });
 reviewDownloadAllBtn.addEventListener("click", () => {
   if (!currentProject) return;
-  // No zip library is bundled (no build step in this app), so each file
-  // downloads individually in sequence — still one click.
+  
+  
   currentProject.files.forEach((file, i) => {
     setTimeout(() => triggerDownload(file.content, file.filename), i * 150);
   });
@@ -677,6 +666,8 @@ function closeSidebar() {
   sidebarOverlay.classList.remove("open");
 }
 hamburgerBtn.addEventListener("click", openSidebar);
+const mobileMenuBtn = document.getElementById("mobile-menu-btn");
+if (mobileMenuBtn) mobileMenuBtn.addEventListener("click", openSidebar);
 sidebarOverlay.addEventListener("click", closeSidebar);
 
 // ---------- Model picker ----------
@@ -915,8 +906,6 @@ function renderMessageAttachments(attachments) {
   return `<div class="msg-attachments">${parts.join("")}</div>`;
 }
 
-
-
 async function deleteConversation(id, title) {
   const confirmed = window.confirm(`Delete "${title || "this conversation"}"? This can't be undone.`);
   if (!confirmed) return;
@@ -990,7 +979,6 @@ input.addEventListener("keydown", (e) => {
   }
 });
 sendBtn.addEventListener("click", sendMessage);
-
 
 function setStreamingUI(on) {
   streaming = on;
