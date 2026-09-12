@@ -4,10 +4,10 @@ import hashlib
 from datetime import datetime, timedelta, timezone
 
 import bcrypt
-from flask import Blueprint, request, jsonify, redirect, url_for, session
+from flask import Blueprint, request, jsonify, redirect, session
 from flask_login import login_user, logout_user, login_required, current_user
 
-from extensions import db, oauth
+from extensions import db, oauth, limiter
 from models import User, PasswordReset
 from mailer import send_otp_email
 
@@ -44,6 +44,8 @@ def _password_strength_error(password: str) -> str | None:
 
 
 @auth_bp.post("/api/register")
+@limiter.limit("5 per minute")
+@limiter.limit("20 per hour")
 def register():
     data = request.get_json(silent=True) or {}
     name = (data.get("name") or "").strip() or None
@@ -52,6 +54,9 @@ def register():
 
     if not email or not password:
         return jsonify({"error": "Email and password are required."}), 400
+
+    if len(email) > 255 or (name and len(name) > 255):
+        return jsonify({"error": "Input too long."}), 400
 
     strength_error = _password_strength_error(password)
     if strength_error:
@@ -65,11 +70,13 @@ def register():
     db.session.add(user)
     db.session.commit()
 
-    login_user(user)
+    login_user(user, remember=True)
     return jsonify(user.to_public_dict()), 201
 
 
 @auth_bp.post("/api/login")
+@limiter.limit("10 per minute")
+@limiter.limit("40 per hour")
 def login():
     data = request.get_json(silent=True) or {}
     email = (data.get("email") or "").strip().lower()
@@ -82,11 +89,13 @@ def login():
     if not bcrypt.checkpw(password.encode(), user.password_hash.encode()):
         return jsonify({"error": "That email or password doesn't match our records."}), 401
 
-    login_user(user)
+    login_user(user, remember=True)
     return jsonify(user.to_public_dict())
 
 
 @auth_bp.post("/api/forgot-password")
+@limiter.limit("3 per minute")
+@limiter.limit("10 per hour")
 def forgot_password():
     data = request.get_json(silent=True) or {}
     email = (data.get("email") or "").strip().lower()
@@ -115,6 +124,7 @@ def forgot_password():
 
 
 @auth_bp.post("/api/verify-otp")
+@limiter.limit("10 per minute")
 def verify_otp():
     data = request.get_json(silent=True) or {}
     email = (data.get("email") or "").strip().lower()
@@ -153,6 +163,7 @@ def verify_otp():
 
 
 @auth_bp.post("/api/reset-password")
+@limiter.limit("5 per minute")
 def reset_password():
     data = request.get_json(silent=True) or {}
     email = (data.get("email") or "").strip().lower()
@@ -205,24 +216,72 @@ def me():
     return jsonify(current_user.to_public_dict())
 
 
+@auth_bp.patch("/api/me")
+@login_required
+@limiter.limit("10 per minute")
+def update_profile():
+    data = request.get_json(silent=True) or {}
+    name = data.get("name")
+    if name is not None:
+        name = (name or "").strip() or None
+        if name and len(name) > 255:
+            return jsonify({"error": "Name is too long."}), 400
+        current_user.name = name
+    db.session.commit()
+    return jsonify(current_user.to_public_dict())
+
+
+@auth_bp.post("/api/change-password")
+@login_required
+@limiter.limit("5 per minute")
+def change_password():
+    data = request.get_json(silent=True) or {}
+    current_password = data.get("currentPassword") or ""
+    new_password = data.get("newPassword") or ""
+
+    if not current_user.password_hash:
+        return jsonify({"error": "This account uses Google sign-in. Set a password via forgot-password first."}), 400
+
+    if not bcrypt.checkpw(current_password.encode(), current_user.password_hash.encode()):
+        return jsonify({"error": "Current password is incorrect."}), 401
+
+    strength_error = _password_strength_error(new_password)
+    if strength_error:
+        return jsonify({"error": strength_error}), 400
+
+    current_user.password_hash = bcrypt.hashpw(new_password.encode(), bcrypt.gensalt()).decode()
+    db.session.commit()
+    return jsonify({"ok": True})
+
+
+@auth_bp.delete("/api/me")
+@login_required
+@limiter.limit("3 per hour")
+def delete_account():
+    """Permanently delete the current user and all their data."""
+    user = current_user
+    logout_user()
+    # Cascade deletes conversations + messages via relationship
+    db.session.delete(user)
+    db.session.commit()
+    return jsonify({"ok": True})
+
+
 # --- Google OAuth ---
 
 @auth_bp.get("/auth/google")
+@limiter.limit("20 per minute")
 def google_login():
     # Force the redirect_uri to match FRONTEND_URL exactly, instead of deriving
     # it from the incoming request's Host header (url_for(..., _external=True)).
-    # That derivation breaks if the browser ever accesses the app via
-    # 127.0.0.1 or a LAN IP instead of localhost, causing Google's
-    # redirect_uri_mismatch error even when Cloud Console is configured
-    # correctly.
-    frontend_url = os.getenv("FRONTEND_URL", "http://localhost:5000")
+    frontend_url = os.getenv("FRONTEND_URL", "http://localhost:5000").rstrip("/")
     redirect_uri = f"{frontend_url}/auth/google/callback"
     return oauth.google.authorize_redirect(redirect_uri)
 
 
 @auth_bp.get("/auth/google/callback")
 def google_callback():
-    frontend_url = os.getenv("FRONTEND_URL", "http://localhost:5000")
+    frontend_url = os.getenv("FRONTEND_URL", "http://localhost:5000").rstrip("/")
     try:
         token = oauth.google.authorize_access_token()
         userinfo = token.get("userinfo") or oauth.google.userinfo()
@@ -241,10 +300,12 @@ def google_callback():
         if user:
             user.google_id = google_id
             user.image = user.image or picture
+            if not user.name and name:
+                user.name = name
         else:
             user = User(name=name, email=email, google_id=google_id, image=picture)
             db.session.add(user)
         db.session.commit()
 
-    login_user(user)
+    login_user(user, remember=True)
     return redirect(f"{frontend_url}/chat.html")

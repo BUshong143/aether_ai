@@ -1,11 +1,15 @@
-import os, sys
+import os
+import sys
+
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
-from flask import Flask, send_from_directory
+from flask import Flask, send_from_directory, jsonify
 from flask_cors import CORS
+from flask_limiter import Limiter
+from flask_limiter.util import get_remote_address
 from dotenv import load_dotenv
 
-from extensions import db, login_manager, oauth
+from extensions import db, login_manager, oauth, limiter
 from models import User
 from auth_routes import auth_bp
 from chat_routes import chat_bp
@@ -15,19 +19,46 @@ load_dotenv()
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 FRONTEND_DIR = os.path.join(BASE_DIR, "..", "frontend")
 
+# --- Security: SECRET_KEY must be set. Never fall back to a hardcoded value. ---
+SECRET_KEY = os.getenv("SECRET_KEY")
+if not SECRET_KEY:
+    raise RuntimeError(
+        "SECRET_KEY environment variable is required. "
+        'Generate one with: python -c "import secrets; print(secrets.token_hex(32))"'
+    )
+
+FRONTEND_URL = os.getenv("FRONTEND_URL", "http://localhost:5000").rstrip("/")
+IS_PRODUCTION = os.getenv("FLASK_ENV", "").lower() == "production"
+
 app = Flask(__name__, static_folder=FRONTEND_DIR, static_url_path="")
-app.config["SECRET_KEY"] = os.getenv("SECRET_KEY", "dev-secret-change-me")
+app.config["SECRET_KEY"] = SECRET_KEY
 app.config["SQLALCHEMY_DATABASE_URI"] = os.getenv("DATABASE_URL")
 app.config["SQLALCHEMY_ENGINE_OPTIONS"] = {"pool_pre_ping": True}
+app.config["SQLALCHEMY_TRACK_MODIFICATIONS"] = False
 
+# Session cookie hardening
 app.config["SESSION_COOKIE_SAMESITE"] = "Lax"
-app.config["SESSION_COOKIE_SECURE"] = os.getenv("FLASK_ENV") == "production"
+app.config["SESSION_COOKIE_SECURE"] = IS_PRODUCTION
+app.config["SESSION_COOKIE_HTTPONLY"] = True
+app.config["REMEMBER_COOKIE_SECURE"] = IS_PRODUCTION
+app.config["REMEMBER_COOKIE_HTTPONLY"] = True
 
-CORS(app, supports_credentials=True)
+# Restrict CORS to the configured frontend origin only
+CORS(
+    app,
+    supports_credentials=True,
+    origins=[FRONTEND_URL, "http://localhost:5000", "http://127.0.0.1:5000"],
+    methods=["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
+    allow_headers=["Content-Type", "Authorization"],
+)
+
+# Rate limiting (storage in memory is fine for single-process; use Redis in multi-worker prod)
+limiter.init_app(app)
 
 db.init_app(app)
 login_manager.init_app(app)
 login_manager.login_view = None
+login_manager.session_protection = "strong"
 
 oauth.init_app(app)
 oauth.register(
@@ -46,9 +77,12 @@ def load_user(user_id):
 
 @login_manager.unauthorized_handler
 def unauthorized():
-    from flask import jsonify
-
     return jsonify({"error": "Unauthorized"}), 401
+
+
+@app.errorhandler(429)
+def ratelimit_handler(e):
+    return jsonify({"error": "Too many requests. Please try again later."}), 429
 
 
 app.register_blueprint(auth_bp)
@@ -62,6 +96,9 @@ def index():
 
 @app.get("/<path:filename>")
 def frontend_files(filename):
+    # Prevent path traversal
+    if ".." in filename or filename.startswith("/"):
+        return jsonify({"error": "Not found"}), 404
     return send_from_directory(FRONTEND_DIR, filename)
 
 
@@ -75,4 +112,6 @@ with app.app_context():
 
 
 if __name__ == "__main__":
-    app.run(host="0.0.0.0", port=5000, debug=True, threaded=True)
+    # debug=False by default in production; only enable explicitly for local
+    debug = not IS_PRODUCTION and os.getenv("FLASK_DEBUG", "1") == "1"
+    app.run(host="0.0.0.0", port=int(os.getenv("PORT", "5000")), debug=debug, threaded=True)

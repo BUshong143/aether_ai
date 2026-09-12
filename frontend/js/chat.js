@@ -19,10 +19,29 @@ const modelPicker = document.getElementById("model-picker");
 const modelPickerBtn = document.getElementById("model-picker-btn");
 const modelPickerLabel = document.getElementById("model-picker-label");
 const modelPickerMenu = document.getElementById("model-picker-menu");
+const stopBtn = document.getElementById("stop-btn");
+const convoSearch = document.getElementById("convo-search");
+const settingsBtn = document.getElementById("settings-btn");
+const settingsPanel = document.getElementById("settings-panel");
+const settingsOverlay = document.getElementById("settings-overlay");
+const settingsCloseBtn = document.getElementById("settings-close-btn");
+const settingsName = document.getElementById("settings-name");
+const settingsEmail = document.getElementById("settings-email");
+const saveProfileBtn = document.getElementById("save-profile-btn");
+const profileMsg = document.getElementById("profile-msg");
+const settingsCurrentPw = document.getElementById("settings-current-pw");
+const settingsNewPw = document.getElementById("settings-new-pw");
+const changePwBtn = document.getElementById("change-pw-btn");
+const pwMsg = document.getElementById("pw-msg");
+const deleteAccountBtn = document.getElementById("delete-account-btn");
+const suggestedPrompts = document.getElementById("suggested-prompts");
 
 let activeId = null;
 let streaming = false;
 let userInitial = "U";
+let abortController = null;
+let lastUserMessage = null; // { text, attachments } for regenerate
+let currentUser = null;
 
 let models = [];
 let selectedModelId = localStorage.getItem("aether_model") || null;
@@ -38,6 +57,7 @@ const CHEVRON_RIGHT = `<svg width="12" height="12" viewBox="0 0 24 24" fill="non
 const TRASH_ICON = `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/><line x1="10" y1="11" x2="10" y2="17"/><line x1="14" y1="11" x2="14" y2="17"/></svg>`;
 
 const TEXTY_EXT = /\.(txt|md|markdown|csv|json|log|py|js|jsx|ts|tsx|html|htm|css|yml|yaml|xml|sql|c|cpp|h|java|go|rb|php|sh|toml|ini|env)$/i;
+const PDF_EXT = /\.pdf$/i;
 
 // Review panel elements
 const reviewPanel = document.getElementById("review-panel");
@@ -164,6 +184,8 @@ const CHECK_ICON = `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" 
 const DOWNLOAD_ICON = `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>`;
 const REVIEW_ICON = `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="2"/><line x1="9" y1="3" x2="9" y2="21"/></svg>`;
 const EYE_ICON = `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>`;
+const REGEN_ICON = `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="23 4 23 10 17 10"/><polyline points="1 20 1 14 7 14"/><path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"/></svg>`;
+const PENCIL_ICON = `<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 20h9"/><path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z"/></svg>`;
 
 async function copyText(text) {
   try {
@@ -399,6 +421,8 @@ function renderMarkdown(text, msgId) {
         if (!messageBlocksStore.has(msgId)) messageBlocksStore.set(msgId, []);
         messageBlocksStore.get(msgId).push(id);
       }
+      const lines = code.replace(/\n$/, "").split("\n");
+      const lineNos = lines.map((_, i) => i + 1).join("\n");
       html += `
         <div class="code-block" data-block-id="${id}">
           <div class="code-block-toolbar">
@@ -409,7 +433,10 @@ function renderMarkdown(text, msgId) {
               <button class="icon-btn-sm" data-action="review-code" data-block-id="${id}" title="Open in review panel">${REVIEW_ICON}</button>
             </div>
           </div>
-          <pre><code>${escapeHtml(code)}</code></pre>
+          <div class="code-block-body">
+            <pre class="code-line-nos" aria-hidden="true">${lineNos}</pre>
+            <pre class="code-content"><code>${escapeHtml(code)}</code></pre>
+          </div>
         </div>`;
     }
   }
@@ -541,6 +568,13 @@ function buildMessageToolbar(bubble, msgId) {
   });
   bar.appendChild(copyBtn);
 
+  const regenBtn = document.createElement("button");
+  regenBtn.className = "icon-btn-sm";
+  regenBtn.title = "Regenerate response";
+  regenBtn.innerHTML = REGEN_ICON;
+  regenBtn.addEventListener("click", () => regenerateLast());
+  bar.appendChild(regenBtn);
+
   const blockIds = messageBlocksStore.get(msgId);
   if (blockIds && blockIds.length) {
     const previewBtn = document.createElement("button");
@@ -619,7 +653,7 @@ function addMessageBubble(role, content, isTyping, createdAt, attachments) {
 function clearMessages() {
   messagesInner.innerHTML = "";
   messagesInner.appendChild(emptyState);
-  emptyState.style.display = "block";
+  emptyState.style.display = "flex";
 }
 
 function openSidebar() {
@@ -804,25 +838,39 @@ const MAX_IMAGE_BYTES = 4 * 1024 * 1024;
 const MAX_IMAGES = 5;
 
 async function handleFiles(fileList) {
-  const files = Array.from(fileList);
-  for (const file of files) {
+  for (const file of Array.from(fileList)) {
+    if (file.size > 12 * 1024 * 1024) {
+      alert(`"${file.name}" is too large (max 12MB).`);
+      continue;
+    }
     if (file.type.startsWith("image/")) {
-      const existingImages = pendingAttachments.filter((a) => a.kind === "image").length;
-      if (existingImages >= MAX_IMAGES) {
-        alert(`You can attach up to ${MAX_IMAGES} images at once.`);
-        continue;
-      }
-      if (file.size > MAX_IMAGE_BYTES) {
-        alert(`"${file.name}" is too large (max 4MB).`);
-        continue;
-      }
       const dataUrl = await readFileAsDataUrl(file);
       pendingAttachments.push({ kind: "image", name: file.name, mime: file.type, dataUrl });
+    } else if (PDF_EXT.test(file.name) || file.type === "application/pdf") {
+      // Extract text server-side so the model can actually read the PDF
+      try {
+        const fd = new FormData();
+        fd.append("file", file);
+        const res = await fetch("/api/extract-pdf", { method: "POST", credentials: "include", body: fd });
+        const data = await res.json();
+        if (!res.ok) {
+          alert(data.error || `Couldn't read "${file.name}"`);
+          continue;
+        }
+        pendingAttachments.push({
+          kind: "file",
+          name: file.name,
+          mime: "application/pdf",
+          text: data.text,
+        });
+      } catch (err) {
+        alert(`Couldn't upload "${file.name}"`);
+      }
     } else if (file.type.startsWith("text/") || TEXTY_EXT.test(file.name)) {
       const text = await readFileAsText(file);
       pendingAttachments.push({ kind: "file", name: file.name, mime: file.type || "text/plain", text });
     } else {
-      alert(`"${file.name}" isn't a supported file type yet — try an image or a text/code file.`);
+      alert(`Unsupported file type: ${file.name}`);
     }
   }
   renderAttachmentStrip();
@@ -855,58 +903,7 @@ function renderMessageAttachments(attachments) {
   return `<div class="msg-attachments">${parts.join("")}</div>`;
 }
 
-async function init() {
-  const res = await fetch("/api/me", { credentials: "include" });
-  if (!res.ok) {
-    window.location.href = "/login.html";
-    return;
-  }
-  const user = await res.json();
-  userEmailEl.textContent = user.email;
-  userInitial = (user.name || user.email || "U").trim().charAt(0).toUpperCase();
 
-  loadingEl.style.display = "none";
-  appEl.style.display = "flex";
-
-  await loadModels();
-
-  const urlConvoId = new URL(window.location.href).searchParams.get("c");
-  if (urlConvoId) {
-    await openConversation(urlConvoId);
-  } else {
-    await loadConversations();
-  }
-}
-
-async function loadConversations() {
-  const res = await fetch("/api/conversations", { credentials: "include" });
-  if (!res.ok) return;
-  const conversations = await res.json();
-
-  conversationList.innerHTML = "";
-  conversations.forEach((c) => {
-    const row = document.createElement("div");
-    row.className = "conversation-row" + (c.id === activeId ? " active" : "");
-
-    const btn = document.createElement("button");
-    btn.className = "conversation-item";
-    btn.textContent = c.title;
-    btn.addEventListener("click", () => openConversation(c.id));
-    row.appendChild(btn);
-
-    const delBtn = document.createElement("button");
-    delBtn.className = "conversation-delete-btn";
-    delBtn.innerHTML = TRASH_ICON;
-    delBtn.title = "Delete conversation";
-    delBtn.addEventListener("click", (e) => {
-      e.stopPropagation();
-      deleteConversation(c.id, c.title);
-    });
-    row.appendChild(delBtn);
-
-    conversationList.appendChild(row);
-  });
-}
 
 async function deleteConversation(id, title) {
   const confirmed = window.confirm(`Delete "${title || "this conversation"}"? This can't be undone.`);
@@ -982,22 +979,56 @@ input.addEventListener("keydown", (e) => {
 });
 sendBtn.addEventListener("click", sendMessage);
 
-async function sendMessage() {
-  const text = input.value.trim();
-  if ((!text && !pendingAttachments.length) || streaming) return;
-  input.value = "";
-  input.style.height = "auto";
-  streaming = true;
-  sendBtn.disabled = true;
 
-  const attachmentsForSend = pendingAttachments;
-  pendingAttachments = [];
-  renderAttachmentStrip();
+function setStreamingUI(on) {
+  streaming = on;
+  sendBtn.style.display = on ? "none" : "";
+  stopBtn.style.display = on ? "" : "none";
+  sendBtn.disabled = on;
+  if (!on) {
+    abortController = null;
+  }
+}
+
+stopBtn.addEventListener("click", () => {
+  if (abortController) {
+    abortController.abort();
+  }
+  setStreamingUI(false);
+});
+
+if (suggestedPrompts) {
+  suggestedPrompts.addEventListener("click", (e) => {
+    const chip = e.target.closest(".prompt-chip");
+    if (!chip) return;
+    input.value = chip.dataset.prompt || chip.textContent;
+    input.focus();
+    input.dispatchEvent(new Event("input"));
+    sendMessage();
+  });
+}
+
+async function sendMessage(overrideText, overrideAttachments) {
+  const text = (overrideText !== undefined ? overrideText : input.value).trim();
+  const attachmentsForSend = overrideAttachments !== undefined ? overrideAttachments : pendingAttachments.slice();
+  if ((!text && !attachmentsForSend.length) || streaming) return;
+
+  if (overrideText === undefined) {
+    input.value = "";
+    input.style.height = "auto";
+    pendingAttachments = [];
+    renderAttachmentStrip();
+  }
+
+  lastUserMessage = { text, attachments: attachmentsForSend };
+  setStreamingUI(true);
 
   addMessageBubble("user", text, false, null, attachmentsForSend);
   const assistantBubble = addMessageBubble("assistant", "", true);
   let assistantText = "";
   let firstTokenArrived = false;
+
+  abortController = new AbortController();
 
   let res;
   try {
@@ -1005,6 +1036,7 @@ async function sendMessage() {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       credentials: "include",
+      signal: abortController.signal,
       body: JSON.stringify({
         conversationId: activeId,
         message: text,
@@ -1014,14 +1046,19 @@ async function sendMessage() {
       }),
     });
   } catch (err) {
+    if (err.name === "AbortError") {
+      assistantBubble.innerHTML = renderMarkdown((assistantBubble.dataset.raw || "") + "\n\n*(stopped)*", assistantBubble.dataset.msgId);
+      attachToolbarIfMissing(assistantBubble, assistantBubble.dataset.msgId);
+      setStreamingUI(false);
+      return;
+    }
     res = null;
   }
 
   if (!res || !res.ok || !res.body) {
     assistantBubble.innerHTML = renderMarkdown("Sorry — something went wrong reaching the model.", assistantBubble.dataset.msgId);
     attachToolbarIfMissing(assistantBubble, assistantBubble.dataset.msgId);
-    streaming = false;
-    sendBtn.disabled = false;
+    setStreamingUI(false);
     return;
   }
 
@@ -1029,48 +1066,407 @@ async function sendMessage() {
   const decoder = new TextDecoder();
   let buffer = "";
 
-  while (true) {
-    const { done, value } = await reader.read();
-    if (done) break;
-    buffer += decoder.decode(value, { stream: true });
+  try {
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      buffer += decoder.decode(value, { stream: true });
 
-    const events = buffer.split("\n\n");
-    buffer = events.pop() || "";
+      const events = buffer.split("\n\n");
+      buffer = events.pop() || "";
 
-    for (const evt of events) {
-      const eventMatch = evt.match(/event:\s*(\w+)/);
-      const dataMatch = evt.match(/data:\s*(.*)/);
-      if (!eventMatch || !dataMatch) continue;
-      const eventType = eventMatch[1];
-      const data = JSON.parse(dataMatch[1]);
-
-      if (eventType === "meta") {
-        if (!activeId) {
-          activeId = data.conversationId;
-          setActiveConversationInUrl(activeId);
+      for (const evt of events) {
+        const eventMatch = evt.match(/event:\s*(\w+)/);
+        const dataMatch = evt.match(/data:\s*(.*)/);
+        if (!eventMatch || !dataMatch) continue;
+        const eventType = eventMatch[1];
+        let data;
+        try {
+          data = JSON.parse(dataMatch[1]);
+        } catch {
+          continue;
         }
-      } else if (eventType === "token") {
-        firstTokenArrived = true;
-        assistantText += data.delta;
-        assistantBubble.dataset.raw = assistantText;
-        scheduleAssistantRender(assistantBubble);
-      } else if (eventType === "done") {
-        streaming = false;
-        sendBtn.disabled = false;
-        if (!firstTokenArrived) {
-          assistantBubble.innerHTML = renderMarkdown("(No response received.)", assistantBubble.dataset.msgId);
-        } else {
-          // Force a final synchronous render so the last chunk is guaranteed
-          // to be on screen even if a batched frame hadn't fired yet.
-          pendingRenderBubble = null;
-          assistantBubble.innerHTML = renderMarkdown(assistantBubble.dataset.raw, assistantBubble.dataset.msgId);
-          scrollToBottom();
+
+        if (eventType === "meta") {
+          if (!activeId) {
+            activeId = data.conversationId;
+            setActiveConversationInUrl(activeId);
+          }
+        } else if (eventType === "token") {
+          firstTokenArrived = true;
+          assistantText += data.delta;
+          assistantBubble.dataset.raw = assistantText;
+          scheduleAssistantRender(assistantBubble);
+        } else if (eventType === "done") {
+          if (!firstTokenArrived) {
+            assistantBubble.innerHTML = renderMarkdown("(No response received.)", assistantBubble.dataset.msgId);
+          } else {
+            pendingRenderBubble = null;
+            assistantBubble.innerHTML = renderMarkdown(assistantBubble.dataset.raw, assistantBubble.dataset.msgId);
+            scrollToBottom();
+          }
+          attachToolbarIfMissing(assistantBubble, assistantBubble.dataset.msgId);
+          loadConversations();
         }
-        attachToolbarIfMissing(assistantBubble, assistantBubble.dataset.msgId);
-        loadConversations();
       }
     }
+  } catch (err) {
+    if (err.name !== "AbortError") {
+      console.error(err);
+    } else if (assistantText) {
+      assistantBubble.innerHTML = renderMarkdown(assistantText + "\n\n*(stopped)*", assistantBubble.dataset.msgId);
+      attachToolbarIfMissing(assistantBubble, assistantBubble.dataset.msgId);
+    }
+  } finally {
+    setStreamingUI(false);
   }
 }
+
+function regenerateLast() {
+  if (streaming || !lastUserMessage) return;
+  // Remove last assistant bubble if present
+  const rows = messagesInner.querySelectorAll(".msg-row.assistant");
+  if (rows.length) {
+    rows[rows.length - 1].remove();
+  }
+  // Also remove the corresponding user row so we re-add cleanly
+  const userRows = messagesInner.querySelectorAll(".msg-row.user");
+  if (userRows.length) {
+    userRows[userRows.length - 1].remove();
+  }
+  sendMessage(lastUserMessage.text, lastUserMessage.attachments);
+}
+
+// ---------- Conversation search & rename ----------
+
+let searchTimer = null;
+if (convoSearch) {
+  convoSearch.addEventListener("input", () => {
+    clearTimeout(searchTimer);
+    searchTimer = setTimeout(async () => {
+      const q = convoSearch.value.trim();
+      if (q.length < 2) {
+        await loadConversations();
+        return;
+      }
+      const res = await fetch(`/api/conversations/search?q=${encodeURIComponent(q)}`, { credentials: "include" });
+      if (!res.ok) return;
+      const conversations = await res.json();
+      renderConversationList(conversations);
+    }, 250);
+  });
+}
+
+function renderConversationList(conversations) {
+  conversationList.innerHTML = "";
+  conversations.forEach((c) => {
+    const row = document.createElement("div");
+    row.className = "conversation-row" + (c.id === activeId ? " active" : "");
+
+    const btn = document.createElement("button");
+    btn.className = "conversation-item";
+    btn.textContent = c.title;
+    btn.title = c.title;
+    btn.addEventListener("click", () => openConversation(c.id));
+    row.appendChild(btn);
+
+    const renameBtn = document.createElement("button");
+    renameBtn.className = "conversation-rename-btn";
+    renameBtn.innerHTML = PENCIL_ICON;
+    renameBtn.title = "Rename";
+    renameBtn.addEventListener("click", (e) => {
+      e.stopPropagation();
+      renameConversation(c.id, c.title);
+    });
+    row.appendChild(renameBtn);
+
+    const delBtn = document.createElement("button");
+    delBtn.className = "conversation-delete-btn";
+    delBtn.innerHTML = TRASH_ICON;
+    delBtn.title = "Delete conversation";
+    delBtn.addEventListener("click", (e) => {
+      e.stopPropagation();
+      deleteConversation(c.id, c.title);
+    });
+    row.appendChild(delBtn);
+
+    conversationList.appendChild(row);
+  });
+}
+
+async function renameConversation(id, currentTitle) {
+  const title = window.prompt("Rename conversation", currentTitle || "");
+  if (title === null) return;
+  const trimmed = title.trim();
+  if (!trimmed) return;
+  const res = await fetch(`/api/conversations/${id}`, {
+    method: "PATCH",
+    headers: { "Content-Type": "application/json" },
+    credentials: "include",
+    body: JSON.stringify({ title: trimmed }),
+  });
+  if (!res.ok) {
+    alert("Couldn't rename — please try again.");
+    return;
+  }
+  await loadConversations();
+}
+
+// Override loadConversations to use renderer
+async function loadConversations() {
+  const res = await fetch("/api/conversations", { credentials: "include" });
+  if (!res.ok) return;
+  const conversations = await res.json();
+  renderConversationList(conversations);
+}
+
+// ---------- Settings ----------
+
+function openSettings() {
+  if (!currentUser) return;
+  settingsName.value = currentUser.name || "";
+  settingsEmail.value = currentUser.email || "";
+  profileMsg.textContent = "";
+  pwMsg.textContent = "";
+  settingsCurrentPw.value = "";
+  settingsNewPw.value = "";
+  settingsPanel.style.display = "flex";
+  settingsOverlay.style.display = "block";
+  closeSidebar();
+}
+function closeSettings() {
+  settingsPanel.style.display = "none";
+  settingsOverlay.style.display = "none";
+}
+if (settingsBtn) settingsBtn.addEventListener("click", openSettings);
+if (settingsCloseBtn) settingsCloseBtn.addEventListener("click", closeSettings);
+if (settingsOverlay) settingsOverlay.addEventListener("click", closeSettings);
+
+if (saveProfileBtn) {
+  saveProfileBtn.addEventListener("click", async () => {
+    profileMsg.textContent = "";
+    const res = await fetch("/api/me", {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      credentials: "include",
+      body: JSON.stringify({ name: settingsName.value }),
+    });
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({}));
+      profileMsg.textContent = err.error || "Couldn't save.";
+      profileMsg.className = "settings-msg error";
+      return;
+    }
+    currentUser = await res.json();
+    userEmailEl.textContent = currentUser.email;
+    userInitial = (currentUser.name || currentUser.email || "U").trim().charAt(0).toUpperCase();
+    profileMsg.textContent = "Saved.";
+    profileMsg.className = "settings-msg ok";
+  });
+}
+
+if (changePwBtn) {
+  changePwBtn.addEventListener("click", async () => {
+    pwMsg.textContent = "";
+    const res = await fetch("/api/change-password", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      credentials: "include",
+      body: JSON.stringify({
+        currentPassword: settingsCurrentPw.value,
+        newPassword: settingsNewPw.value,
+      }),
+    });
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) {
+      pwMsg.textContent = data.error || "Couldn't update password.";
+      pwMsg.className = "settings-msg error";
+      return;
+    }
+    settingsCurrentPw.value = "";
+    settingsNewPw.value = "";
+    pwMsg.textContent = "Password updated.";
+    pwMsg.className = "settings-msg ok";
+  });
+}
+
+if (deleteAccountBtn) {
+  deleteAccountBtn.addEventListener("click", async () => {
+    const ok = window.confirm("Delete your account and all conversations permanently? This cannot be undone.");
+    if (!ok) return;
+    const res = await fetch("/api/me", { method: "DELETE", credentials: "include" });
+    if (res.ok) {
+      window.location.href = "/login.html";
+    } else {
+      alert("Couldn't delete account. Try again later.");
+    }
+  });
+}
+
+// Patch init to store currentUser
+async function init() {
+  const res = await fetch("/api/me", { credentials: "include" });
+  if (!res.ok) {
+    window.location.href = "/login.html";
+    return;
+  }
+  currentUser = await res.json();
+  userEmailEl.textContent = currentUser.email;
+  userInitial = (currentUser.name || currentUser.email || "U").trim().charAt(0).toUpperCase();
+
+  loadingEl.style.display = "none";
+  appEl.style.display = "flex";
+
+  await loadModels();
+
+  const urlConvoId = new URL(window.location.href).searchParams.get("c");
+  if (urlConvoId) {
+    await openConversation(urlConvoId);
+  } else {
+    await loadConversations();
+  }
+}
+
+// ---------- Preferences & theme ----------
+const PREFS_KEY = "aether_prefs";
+function loadPrefs() {
+  try {
+    return Object.assign(
+      { timestamps: true, enterSend: true, streamCursor: true, theme: "dark" },
+      JSON.parse(localStorage.getItem(PREFS_KEY) || "{}")
+    );
+  } catch {
+    return { timestamps: true, enterSend: true, streamCursor: true, theme: "dark" };
+  }
+}
+function savePrefs(p) {
+  localStorage.setItem(PREFS_KEY, JSON.stringify(p));
+}
+let prefs = loadPrefs();
+
+function applyTheme(theme) {
+  document.documentElement.setAttribute("data-theme", theme === "light" ? "light" : "dark");
+  prefs.theme = theme === "light" ? "light" : "dark";
+  savePrefs(prefs);
+  const sel = document.getElementById("settings-theme");
+  if (sel) sel.value = prefs.theme;
+}
+applyTheme(prefs.theme);
+
+function applyTimestampVisibility() {
+  document.body.classList.toggle("hide-timestamps", !prefs.timestamps);
+}
+
+const settingsTheme = document.getElementById("settings-theme");
+const prefTimestamps = document.getElementById("pref-timestamps");
+const prefEnterSend = document.getElementById("pref-enter-send");
+const prefStreamCursor = document.getElementById("pref-stream-cursor");
+const logoutHereBtn = document.getElementById("logout-here-btn");
+const summarizeBtn = document.getElementById("summarize-btn");
+
+if (settingsTheme) {
+  settingsTheme.value = prefs.theme;
+  settingsTheme.addEventListener("change", () => applyTheme(settingsTheme.value));
+}
+if (prefTimestamps) {
+  prefTimestamps.checked = prefs.timestamps;
+  prefTimestamps.addEventListener("change", () => {
+    prefs.timestamps = prefTimestamps.checked;
+    savePrefs(prefs);
+    applyTimestampVisibility();
+  });
+}
+if (prefEnterSend) {
+  prefEnterSend.checked = prefs.enterSend;
+  prefEnterSend.addEventListener("change", () => {
+    prefs.enterSend = prefEnterSend.checked;
+    savePrefs(prefs);
+  });
+}
+if (prefStreamCursor) {
+  prefStreamCursor.checked = prefs.streamCursor;
+  prefStreamCursor.addEventListener("change", () => {
+    prefs.streamCursor = prefStreamCursor.checked;
+    savePrefs(prefs);
+  });
+}
+if (logoutHereBtn) {
+  logoutHereBtn.addEventListener("click", async () => {
+    await fetch("/api/logout", { method: "POST", credentials: "include" });
+    window.location.href = "/login.html";
+  });
+}
+applyTimestampVisibility();
+
+// Streaming cursor: append a blinking caret while generating
+const originalSchedule = scheduleAssistantRender;
+scheduleAssistantRender = function (bubble) {
+  if (prefs.streamCursor) {
+    // temporary: show raw + cursor, final render strips it
+    const raw = bubble.dataset.raw || "";
+    bubble.innerHTML = renderMarkdown(raw, bubble.dataset.msgId) + '<span class="stream-cursor"></span>';
+    scrollToBottom();
+  } else {
+    originalSchedule(bubble);
+  }
+};
+
+// Override Enter handler for preference
+input.addEventListener("keydown", (e) => {
+  if (e.key === "Enter" && !e.shiftKey) {
+    if (prefs.enterSend) {
+      e.preventDefault();
+      sendMessage();
+    }
+  }
+}, true);
+
+// Summarize
+if (summarizeBtn) {
+  summarizeBtn.addEventListener("click", async () => {
+    if (!activeId || streaming) return;
+    summarizeBtn.disabled = true;
+    try {
+      const res = await fetch("/api/summarize", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        credentials: "include",
+        body: JSON.stringify({ conversationId: activeId }),
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        alert(data.error || "Summarization failed");
+        return;
+      }
+      addMessageBubble("assistant", "Summary of this conversation:\\n\\n" + data.summary, false);
+    } catch (err) {
+      alert("Summarization failed");
+    } finally {
+      summarizeBtn.disabled = false;
+    }
+  });
+}
+
+function updateSummarizeVisibility() {
+  if (summarizeBtn) summarizeBtn.style.display = activeId ? "" : "none";
+}
+
+// Patch openConversation / new chat to toggle summarize button
+const _openConversation = openConversation;
+openConversation = async function (id) {
+  await _openConversation(id);
+  updateSummarizeVisibility();
+};
+newChatBtn.addEventListener("click", () => updateSummarizeVisibility());
+
+// Edit last user message: double-click user bubble
+messagesInner.addEventListener("dblclick", (e) => {
+  const bubble = e.target.closest(".bubble.user");
+  if (!bubble || streaming) return;
+  const raw = bubble.dataset.raw || bubble.textContent || "";
+  input.value = raw;
+  input.focus();
+  input.dispatchEvent(new Event("input"));
+});
 
 init();

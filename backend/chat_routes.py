@@ -4,7 +4,7 @@ import requests
 from flask import Blueprint, request, jsonify, Response, stream_with_context, current_app
 from flask_login import login_required, current_user
 
-from extensions import db
+from extensions import db, limiter
 from models import Conversation, Message
 
 chat_bp = Blueprint("chat", __name__)
@@ -92,8 +92,8 @@ SYSTEM_PROMPT = (
     "- Image attachments: when a vision-capable model is selected (or "
     "automatically used because an image was attached), you can see and "
     "describe/analyze images the person uploads\n"
-    "- Text file attachments (.txt, .md, .csv, .json, code files, etc.), "
-    "whose contents get included in the conversation for you to read\n"
+    "- Text file and PDF attachments (.txt, .md, .csv, .json, code files, PDFs), "
+    "whose extracted text is included in the conversation for you to read and analyze\n"
     "- Real image generation: when the person asks you to draw, create, "
     "generate, or make an image/picture/photo/illustration of something, "
     "respond with a fenced code block using the language tag 'image' "
@@ -195,6 +195,87 @@ def generate_document():
     )
 
 
+
+@chat_bp.post("/api/extract-pdf")
+@login_required
+@limiter.limit("20 per minute")
+def extract_pdf():
+    """Extract plain text from an uploaded PDF for analysis in chat."""
+    if "file" not in request.files:
+        return jsonify({"error": "No file uploaded."}), 400
+    f = request.files["file"]
+    if not f.filename or not f.filename.lower().endswith(".pdf"):
+        return jsonify({"error": "Please upload a PDF file."}), 400
+    try:
+        from pypdf import PdfReader
+        import io
+        reader = PdfReader(io.BytesIO(f.read()))
+        pages = []
+        for i, page in enumerate(reader.pages[:50]):  # cap at 50 pages
+            try:
+                t = page.extract_text() or ""
+            except Exception:
+                t = ""
+            if t.strip():
+                pages.append(f"--- Page {i + 1} ---\n{t.strip()}")
+        text_out = "\n\n".join(pages)
+        if not text_out.strip():
+            return jsonify({"error": "Could not extract text from this PDF (it may be scanned/image-only)."}), 400
+        # Bound size for the model context
+        if len(text_out) > 60000:
+            text_out = text_out[:60000] + "\n\n[... truncated ...]"
+        return jsonify({"text": text_out, "pages": min(len(reader.pages), 50), "name": f.filename})
+    except ImportError:
+        return jsonify({"error": "PDF support not installed. Run: pip install pypdf"}), 500
+    except Exception as e:
+        print(f"[pdf] extract failed: {e}")
+        return jsonify({"error": "Failed to read this PDF."}), 500
+
+
+@chat_bp.post("/api/summarize")
+@login_required
+@limiter.limit("10 per minute")
+def summarize_conversation():
+    """Return a short summary of the current conversation by asking the model."""
+    data = request.get_json(silent=True) or {}
+    conversation_id = data.get("conversationId")
+    if not conversation_id:
+        return jsonify({"error": "conversationId required"}), 400
+    convo = Conversation.query.filter_by(id=conversation_id, user_id=current_user.id).first()
+    if not convo:
+        return jsonify({"error": "Not found"}), 404
+    msgs = convo.messages[-20:]
+    if not msgs:
+        return jsonify({"error": "Nothing to summarize yet."}), 400
+    transcript = "\n".join(f"{m.role}: {m.content[:800]}" for m in msgs)
+    payload = {
+        "model": DEFAULT_MODEL,
+        "messages": [
+            {"role": "system", "content": "Summarize the following conversation in 3-6 concise bullet points. Plain text only, no markdown headers."},
+            {"role": "user", "content": transcript},
+        ],
+        "temperature": 0.3,
+        "max_tokens": 400,
+    }
+    try:
+        resp = _http_session.post(
+            f"{os.getenv('GROQ_BASE_URL', 'https://api.groq.com/openai/v1')}/chat/completions",
+            headers={
+                "Authorization": f"Bearer {os.getenv('GROQ_API_KEY')}",
+                "Content-Type": "application/json",
+            },
+            json=payload,
+            timeout=60,
+        )
+        if resp.status_code >= 400:
+            return jsonify({"error": "Model error while summarizing."}), 502
+        summary = resp.json()["choices"][0]["message"]["content"]
+        return jsonify({"summary": summary})
+    except Exception as e:
+        print(f"[summarize] {e}")
+        return jsonify({"error": "Summarization failed."}), 500
+
+
 @chat_bp.get("/api/models")
 @login_required
 def list_models():
@@ -238,8 +319,65 @@ def delete_conversation(conversation_id):
     return jsonify({"ok": True})
 
 
+@chat_bp.patch("/api/conversations/<conversation_id>")
+@login_required
+@limiter.limit("30 per minute")
+def rename_conversation(conversation_id):
+    convo = Conversation.query.filter_by(id=conversation_id, user_id=current_user.id).first()
+    if not convo:
+        return jsonify({"error": "Not found"}), 404
+    data = request.get_json(silent=True) or {}
+    title = (data.get("title") or "").strip()
+    if not title:
+        return jsonify({"error": "Title is required."}), 400
+    if len(title) > 255:
+        title = title[:255]
+    convo.title = title
+    db.session.commit()
+    return jsonify(convo.to_summary_dict())
+
+
+@chat_bp.get("/api/conversations/search")
+@login_required
+@limiter.limit("30 per minute")
+def search_conversations():
+    q = (request.args.get("q") or "").strip()
+    if not q or len(q) < 2:
+        return jsonify([])
+    # Search by title first, then by message content (limited)
+    from sqlalchemy import or_
+    title_matches = (
+        Conversation.query.filter_by(user_id=current_user.id)
+        .filter(Conversation.title.ilike(f"%{q}%"))
+        .order_by(Conversation.updated_at.desc())
+        .limit(20)
+        .all()
+    )
+    seen = {c.id for c in title_matches}
+    # Also search recent messages
+    msg_matches = (
+        Message.query.join(Conversation)
+        .filter(Conversation.user_id == current_user.id)
+        .filter(Message.content.ilike(f"%{q}%"))
+        .order_by(Message.created_at.desc())
+        .limit(30)
+        .all()
+    )
+    extra = []
+    for m in msg_matches:
+        if m.conversation_id not in seen:
+            seen.add(m.conversation_id)
+            convo = Conversation.query.get(m.conversation_id)
+            if convo:
+                extra.append(convo)
+    results = title_matches + extra
+    results.sort(key=lambda c: c.updated_at or c.created_at, reverse=True)
+    return jsonify([c.to_summary_dict() for c in results[:20]])
+
+
 @chat_bp.post("/api/chat")
 @login_required
+@limiter.limit("30 per minute")
 def chat():
     data = request.get_json(silent=True) or {}
     conversation_id = data.get("conversationId")

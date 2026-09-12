@@ -1,113 +1,66 @@
-# Aether — Python (Flask) + HTML/CSS/JS
+# Aether
 
-Same app as before, rebuilt with a Python backend and a plain HTML/CSS/JS
-frontend (no build step, no framework). Flask serves both the API and the
-static frontend files from one process.
+**Your thoughts, elevated.**
 
-- **Backend:** Flask, Flask-SQLAlchemy, Flask-Login, Authlib (Google OAuth)
-- **Frontend:** plain HTML + CSS + vanilla JS (`frontend/`)
-- **Database:** Neon Postgres
-- **AI:** NVIDIA NIM, streamed token-by-token to the browser
+A polished AI chat application with persistent conversations, streaming responses, file attachments, document generation, and Google/email auth.
 
-## ⚠️ Rotate your keys
+## Security notes (important)
 
-Same reminder as before — the NVIDIA key and Neon password were shared in
-plain text in chat. Revoke/regenerate them (NVIDIA: build.nvidia.com →
-API Keys. Neon: console → reset password) and put the new values in
-`backend/.env`, which is gitignored.
+- **Never commit `backend/.env`**. It is listed in `.gitignore`. Only use `.env.example` as a template.
+- `SECRET_KEY` is **required** — the app will refuse to start without it. Generate with:
+  ```bash
+  python -c "import secrets; print(secrets.token_hex(32))"
+  ```
+- CORS is restricted to `FRONTEND_URL` (plus localhost for development).
+- Rate limits apply to login, registration, password-reset, OTP, and chat endpoints.
+- Session cookies are `HttpOnly` and `Secure` in production (`FLASK_ENV=production`).
 
-## 1. Install
+If secrets were ever committed or shared in a ZIP, **rotate them immediately**:
+Neon DB password, `SECRET_KEY`, Google OAuth client secret, Groq/NVIDIA API keys, Brevo API key.
+
+## Quick start
 
 ```bash
 cd backend
 python3 -m venv venv
-source venv/bin/activate        # on Windows: venv\Scripts\activate
+source venv/bin/activate   # Windows: venv\Scripts\activate
 pip install -r requirements.txt
+cp .env.example .env
+# Edit .env with your real values
+python app.py
 ```
 
-## 2. Configure environment
+Open http://localhost:5000
 
-`backend/.env` is already filled in with your Neon URL, a generated
-`SECRET_KEY`, and your NVIDIA key. You still need to add Google OAuth
-credentials.
+## Features
 
-### Important — Google redirect URI changed
+- Email/password + Google OAuth
+- Streaming chat (SSE) with multiple Groq models
+- Conversation history, search, rename, delete
+- Image + text file attachments
+- Code blocks with copy / download
+- Live HTML/CSS/JS review panel
+- Document generation (DOCX / PPTX / PDF)
+- Image generation via prompt fences
+- Settings: profile, change password, delete account
+- Mobile-friendly layout with suggested prompts
 
-Because this is now a Flask app (not the old Next.js one), the OAuth
-callback path is different. In Google Cloud Console → your OAuth client
-→ **Authorized redirect URIs**, use:
+## Production
 
-```
-http://localhost:5000/auth/google/callback
-```
-
-And **Authorized JavaScript origins**:
-
-```
-http://localhost:5000
-```
-
-(Not `localhost:3000` and not `/api/auth/callback/google` — those were
-specific to the previous Next.js version.)
-
-Copy the resulting Client ID and Secret into `backend/.env`:
-
-```
-GOOGLE_CLIENT_ID="..."
-GOOGLE_CLIENT_SECRET="..."
-```
-
-## 3. Create the database tables
+Prefer Render, Railway, or similar long-running hosts (not Vercel serverless) because of SSE streams.
 
 ```bash
-python3 -c "from app import app, db; app.app_context().push(); db.create_all()"
+gunicorn -w 2 -b 0.0.0.0:$PORT app:app
 ```
 
-This creates `users`, `conversations`, and `messages` in your Neon database.
+Set `FLASK_ENV=production` and update `FRONTEND_URL` + Google redirect URIs to your domain.
 
-## 4. Run it
+## Project layout
 
-```bash
-python3 app.py
-```
+- `backend/app.py` — Flask app, security config, static serving
+- `backend/auth_routes.py` — auth + profile endpoints
+- `backend/chat_routes.py` — conversations + streaming chat
+- `backend/document_gen.py` — DOCX/PPTX/PDF builders
+- `frontend/` — vanilla HTML/CSS/JS UI
 
-Visit `http://localhost:5000` → serves `login.html`, with email/password
-fields and "Continue with Google" underneath. Register at
-`http://localhost:5000/register.html`.
-
-## How it fits together
-
-- `backend/app.py` — Flask app factory: config, extensions, blueprints, and
-  routes that serve the static frontend files.
-- `backend/models.py` — SQLAlchemy models (`User`, `Conversation`, `Message`).
-- `backend/auth_routes.py` — `/api/register`, `/api/login`, `/api/logout`,
-  `/api/me`, and the Google OAuth flow (`/auth/google`,
-  `/auth/google/callback`).
-- `backend/chat_routes.py` — conversation CRUD + `/api/chat`, which streams
-  Server-Sent Events from NVIDIA NIM to the browser and saves both sides of
-  the exchange to Postgres.
-- `frontend/*.html` + `frontend/js/*.js` — no framework, just `fetch()`
-  calls against the Flask API, with `credentials: "include"` so the
-  session cookie is sent.
-
-## Deploying later
-
-Flask apps don't deploy to Vercel the way Next.js does (Vercel's Python
-support is limited to serverless functions, not long-running Flask apps
-with persistent SSE streams). Better fits when you're ready:
-
-- **Render** or **Railway** — push the repo, they detect Flask/`gunicorn`
-  automatically. Add the same env vars from `.env` in their dashboard.
-- Run in production with `gunicorn -w 2 -b 0.0.0.0:$PORT app:app` instead
-  of `python3 app.py` (add `gunicorn` — already in `requirements.txt`).
-- Update `FRONTEND_URL` and the Google redirect URIs to your production
-  domain once you have one, same pattern as the localhost setup above.
-
-Let me know when you're ready to deploy and I'll walk through whichever
-host you pick.
-
-## Roadmap
-
-Same as before — this covers auth, persistent chat, and one AI provider.
-Multi-provider switching, file/image upload, billing, admin dashboard,
-etc. are still open. Ask for any of these next.
+Built by Greg Garrido.
