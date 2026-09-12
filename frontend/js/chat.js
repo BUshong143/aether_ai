@@ -672,6 +672,19 @@ sidebarOverlay.addEventListener("click", closeSidebar);
 
 // ---------- Model picker ----------
 
+
+const MODEL_ICONS = {
+  zap: `<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/></svg>`,
+  wrench: `<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.77-3.77a6 6 0 0 1-7.94 7.94l-6.91 6.91a2.12 2.12 0 0 1-3-3l6.91-6.91a6 6 0 0 1 7.94-7.94l-3.76 3.76z"/></svg>`,
+  rocket: `<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4.5 16.5c-1.5 1.26-2 5-2 5s3.74-.5 5-2c.71-.84.7-2.13-.09-2.91a2.18 2.18 0 0 0-2.91-.09z"/><path d="M12 15l-3-3a22 22 0 0 1 2-3.95A12.88 12.88 0 0 1 22 2c0 2.72-.78 7.5-6 11a22.35 22.35 0 0 1-4 2z"/><path d="M9 12H4s.55-3.03 2-4c1.62-1.08 5 0 5 0"/><path d="M12 15v5s3.03-.55 4-2c1.08-1.62 0-5 0-5"/></svg>`,
+  bulb: `<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 18h6"/><path d="M10 22h4"/><path d="M12 2a7 7 0 0 0-4 12c.6.6 1 1.5 1 2.4V18h6v-1.6c0-.9.4-1.8 1-2.4A7 7 0 0 0 12 2z"/></svg>`,
+  eye: `<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>`,
+  layers: `<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="12 2 2 7 12 12 22 7 12 2"/><polyline points="2 17 12 22 22 17"/><polyline points="2 12 12 17 22 12"/></svg>`,
+};
+function modelIcon(name) {
+  return MODEL_ICONS[name] || MODEL_ICONS.rocket;
+}
+
 function currentModel() {
   return models.find((m) => m.id === selectedModelId) || models[0] || null;
 }
@@ -694,55 +707,29 @@ async function loadModels() {
 
 function renderModelPickerButton() {
   const m = currentModel();
-  modelPickerLabel.textContent = m ? m.label : "Model";
+  if (modelPickerLabel) modelPickerLabel.textContent = m ? m.label : "Auto";
+  const iconEl = document.getElementById("model-picker-icon");
+  if (iconEl) iconEl.innerHTML = modelIcon(m && m.icon);
 }
+
 
 function renderModelPickerMenu() {
-  const m = currentModel();
-  if (!m) return;
-  const others = models.filter((x) => x.id !== m.id);
-
-  let html = `
-    <button class="model-picker-item selected" data-select-model="${m.id}">
-      <div class="item-top">
-        <span class="item-name">${escapeHtml(m.label)}</span>
-        <span class="item-check">${CHECK_ICON_SM}</span>
-      </div>
-      <span class="item-desc">${escapeHtml(m.description)}</span>
-    </button>`;
-
-  if (m.effort) {
-    const effortLabel = selectedEffort.charAt(0).toUpperCase() + selectedEffort.slice(1);
-    html += `
-      <div class="effort-row" id="effort-toggle">
-        <span class="item-name">Effort</span>
-        <span class="effort-value">${effortLabel} ${CHEVRON_RIGHT}</span>
-      </div>
-      <div class="effort-submenu ${effortSubmenuOpen ? "open" : ""}" id="effort-submenu">
-        ${["low", "medium", "high"].map((lvl) => `
-          <button class="effort-option ${selectedEffort === lvl ? "selected" : ""}" data-select-effort="${lvl}">
-            ${lvl.charAt(0).toUpperCase() + lvl.slice(1)}
-          </button>`).join("")}
-      </div>`;
-  }
-
-  html += `<div class="model-picker-divider"></div>`;
-  html += `<button class="more-models-toggle" id="more-models-toggle">
-      <span>More models</span>${CHEVRON_RIGHT}
-    </button>`;
-
-  if (moreModelsOpen) {
-    html += others.map((om) => `
-      <button class="model-picker-item" data-select-model="${om.id}">
-        <div class="item-top">
-          <span class="item-name">${escapeHtml(om.label)}</span>
-        </div>
-        <span class="item-desc">${escapeHtml(om.description)}</span>
-      </button>`).join("");
-  }
-
-  modelPickerMenu.innerHTML = html;
+  if (!modelPickerMenu) return;
+  const current = currentModel();
+  modelPickerMenu.innerHTML = models.map((m) => {
+    const selected = current && m.id === current.id;
+    return `
+      <button type="button" class="model-picker-item${selected ? " selected" : ""}" data-select-model="${m.id}" role="option" aria-selected="${selected}">
+        <span class="model-item-icon">${modelIcon(m.icon)}</span>
+        <span class="model-item-text">
+          <span class="item-name">${escapeHtml(m.label)}</span>
+          <span class="item-desc">${escapeHtml(m.description || "")}</span>
+        </span>
+        ${selected ? `<span class="item-check">${CHECK_ICON_SM}</span>` : ""}
+      </button>`;
+  }).join("");
 }
+
 
 function openModelPicker() {
   moreModelsOpen = false;
@@ -978,16 +965,39 @@ input.addEventListener("keydown", (e) => {
     sendMessage();
   }
 });
-sendBtn.addEventListener("click", sendMessage);
+if (sendBtn) {
+  sendBtn.addEventListener("click", (e) => {
+    e.preventDefault();
+    e.stopPropagation();
+    if (streaming) return;
+    sendMessage();
+  });
+}
 
+let _streamUnlockTimer = null;
 function setStreamingUI(on) {
-  streaming = on;
+  streaming = !!on;
   if (sendBtn) {
     sendBtn.style.display = "";
-    sendBtn.disabled = on;
+    sendBtn.disabled = !!on;
+    sendBtn.setAttribute("aria-busy", on ? "true" : "false");
   }
-  if (stopBtn) stopBtn.style.display = "none";
-  if (!on) {
+  if (typeof stopBtn !== "undefined" && stopBtn) {
+    stopBtn.style.display = "none";
+  }
+  if (_streamUnlockTimer) {
+    clearTimeout(_streamUnlockTimer);
+    _streamUnlockTimer = null;
+  }
+  if (on) {
+    // Never leave Send locked forever (e.g. hung SSE on Vercel)
+    _streamUnlockTimer = setTimeout(() => {
+      if (streaming) {
+        console.warn("[aether] stream timeout — re-enabling send");
+        setStreamingUI(false);
+      }
+    }, 180000);
+  } else {
     abortController = null;
   }
 }
@@ -1005,9 +1015,21 @@ if (suggestedPrompts) {
 }
 
 async function sendMessage(overrideText, overrideAttachments) {
-  const text = (overrideText !== undefined ? overrideText : input.value).trim();
+  const text = (overrideText !== undefined ? overrideText : (input ? input.value : "")).trim();
   const attachmentsForSend = overrideAttachments !== undefined ? overrideAttachments : pendingAttachments.slice();
-  if ((!text && !attachmentsForSend.length) || streaming) return;
+  if (!text && !attachmentsForSend.length) {
+    if (input) {
+      input.focus();
+      input.placeholder = "Type a message first…";
+      setTimeout(() => { if (input) input.placeholder = "Message…"; }, 2000);
+    }
+    return;
+  }
+  // Recover if a previous request left streaming stuck
+  if (streaming) {
+    console.warn("[aether] resetting stuck streaming flag");
+    setStreamingUI(false);
+  }
 
   if (overrideText === undefined) {
     input.value = "";
@@ -1301,6 +1323,9 @@ if (deleteAccountBtn) {
 
 // Patch init to store currentUser
 async function init() {
+  streaming = false;
+  if (sendBtn) sendBtn.disabled = false;
+
   const res = await fetch("/api/me", { credentials: "include" });
   if (!res.ok) {
     window.location.href = "/login.html";
