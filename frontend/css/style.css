@@ -571,8 +571,13 @@ body {
   display: none;
   position: fixed;
   inset: 0;
-  background: rgba(0,0,0,0.5);
-  z-index: 20;
+  background: rgba(0,0,0,0.55);
+  z-index: 45;
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+}
+.sidebar-overlay.open {
+  display: block !important;
 }
 
 .chat-main { flex: 1; display: flex; flex-direction: column; min-width: 0; }
@@ -2247,5 +2252,25 @@ html[data-theme="light"] .model-picker-item {
 
   .bubble {
     max-width: 88% !important;
+  }
+}
+
+/* Sidebar above dim overlay; overlay catches outside taps */
+@media (max-width: 768px) {
+  .sidebar-overlay.open {
+    display: block !important;
+    z-index: 45 !important;
+    pointer-events: auto !important;
+  }
+  .sidebar.open {
+    z-index: 50 !important;
+    pointer-events: auto !important;
+  }
+  body.sidebar-open {
+    overflow: hidden;
+  }
+  body.sidebar-open .mobile-menu-btn {
+    pointer-events: none;
+    opacity: 0.4;
   }
 }

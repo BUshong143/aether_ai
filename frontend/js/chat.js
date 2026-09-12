@@ -657,18 +657,49 @@ function clearMessages() {
 }
 
 function openSidebar() {
+  if (!sidebar) return;
   sidebar.classList.remove("collapsed");
   sidebar.classList.add("open");
-  sidebarOverlay.classList.add("open");
+  if (sidebarOverlay) {
+    sidebarOverlay.classList.add("open");
+    sidebarOverlay.setAttribute("aria-hidden", "false");
+  }
+  document.body.classList.add("sidebar-open");
 }
 function closeSidebar() {
+  if (!sidebar) return;
   sidebar.classList.remove("open");
-  sidebarOverlay.classList.remove("open");
+  if (sidebarOverlay) {
+    sidebarOverlay.classList.remove("open");
+    sidebarOverlay.setAttribute("aria-hidden", "true");
+  }
+  document.body.classList.remove("sidebar-open");
 }
 if (hamburgerBtn) hamburgerBtn.addEventListener("click", openSidebar);
 const mobileMenuBtn = document.getElementById("mobile-menu-btn");
 if (mobileMenuBtn) mobileMenuBtn.addEventListener("click", openSidebar);
-sidebarOverlay.addEventListener("click", closeSidebar);
+if (sidebarOverlay) {
+  sidebarOverlay.addEventListener("click", (e) => {
+    e.preventDefault();
+    e.stopPropagation();
+    closeSidebar();
+  });
+}
+// Tap outside sidebar on the main chat area also closes (mobile)
+if (typeof appEl !== "undefined" && appEl) {
+  appEl.addEventListener("click", (e) => {
+    if (!sidebar || !sidebar.classList.contains("open")) return;
+    if (sidebar.contains(e.target)) return;
+    if (sidebarOverlay && e.target === sidebarOverlay) return; // handled above
+    if (mobileMenuBtn && mobileMenuBtn.contains(e.target)) return;
+    if (hamburgerBtn && hamburgerBtn.contains(e.target)) return;
+    // only when click is outside sidebar
+    if (!e.target.closest(".sidebar")) closeSidebar();
+  });
+}
+document.addEventListener("keydown", (e) => {
+  if (e.key === "Escape") closeSidebar();
+});
 
 // ---------- Model picker ----------
 
