@@ -578,12 +578,7 @@ body {
 .chat-main { flex: 1; display: flex; flex-direction: column; min-width: 0; }
 
 .chat-topbar {
-  display: none;
-  align-items: center;
-  gap: 12px;
-  padding: 12px 16px;
-  border-bottom: 1px solid var(--line);
-  flex-shrink: 0;
+  display: none !important;
 }
 .btn-hamburger {
   border: none;
@@ -1642,11 +1637,9 @@ html[data-theme="light"] .msg-row.assistant .avatar {
 /* Timestamps hide preference */
 body.hide-timestamps .msg-time { display: none !important; }
 
-/* Topbar actions */
+/* Topbar removed from UI; keep class inert if any leftover markup */
 .chat-topbar {
-  display: flex;
-  align-items: center;
-  gap: 10px;
+  display: none !important;
 }
 .topbar-actions {
   margin-left: auto;
@@ -1854,4 +1847,121 @@ html[data-theme="light"] .composer {
 
 html[data-theme="light"] .composer-inner {
   background: rgba(0,0,0,0.04);
+}
+
+.btn-send-icon { display: none; }
+.btn-send-label { display: inline; }
+
+@media (max-width: 768px) {
+  .chat-topbar { display: none !important; height: 0 !important; overflow: hidden !important; padding: 0 !important; border: none !important; }
+
+  .mobile-menu-btn {
+    display: flex !important;
+    position: fixed;
+    top: max(10px, env(safe-area-inset-top));
+    left: 10px;
+    z-index: 40;
+    width: 42px;
+    height: 42px;
+    border-radius: 12px;
+    border: 1px solid rgba(255,255,255,0.12);
+    background: rgba(18,18,26,0.92);
+    backdrop-filter: blur(12px);
+    -webkit-backdrop-filter: blur(12px);
+    color: #f6f4ee;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    box-shadow: 0 4px 20px rgba(0,0,0,0.4);
+  }
+
+  .messages-wrap {
+    padding: 56px 12px 12px !important;
+  }
+
+  .composer {
+    padding: 8px 10px calc(10px + env(safe-area-inset-bottom, 0px)) !important;
+    border-top: 1px solid rgba(255,255,255,0.08);
+    background: #0e0e14;
+  }
+
+  .composer-inner {
+    max-width: 100% !important;
+    width: 100%;
+    margin: 0 !important;
+    display: flex !important;
+    align-items: flex-end !important;
+    gap: 4px !important;
+    background: #1a1a22 !important;
+    border: 1px solid rgba(255,255,255,0.1) !important;
+    border-radius: 22px !important;
+    padding: 4px 4px 4px 6px !important;
+    box-sizing: border-box;
+  }
+
+  .composer textarea {
+    flex: 1 1 auto !important;
+    min-width: 0 !important;
+    border: none !important;
+    background: transparent !important;
+    box-shadow: none !important;
+    outline: none !important;
+    padding: 10px 8px !important;
+    margin: 0 !important;
+    font-size: 16px !important;
+    line-height: 1.35 !important;
+    max-height: 100px !important;
+    color: #f6f4ee !important;
+  }
+
+  .btn-attach {
+    flex: 0 0 36px !important;
+    width: 36px !important;
+    height: 36px !important;
+    padding: 0 !important;
+    margin: 0 !important;
+    border: none !important;
+    background: transparent !important;
+    color: #8b8f9a !important;
+    border-radius: 50% !important;
+  }
+
+  .model-picker {
+    display: none !important;
+    width: 0 !important;
+    height: 0 !important;
+    overflow: hidden !important;
+    position: absolute !important;
+    pointer-events: none !important;
+  }
+
+  .btn-send,
+  .btn-stop {
+    flex: 0 0 auto !important;
+    width: 40px !important;
+    height: 40px !important;
+    min-width: 40px !important;
+    min-height: 40px !important;
+    padding: 0 !important;
+    margin: 0 !important;
+    border-radius: 50% !important;
+    display: flex !important;
+    align-items: center !important;
+    justify-content: center !important;
+    font-size: 0 !important;
+  }
+
+  .btn-send .btn-send-label { display: none !important; }
+  .btn-send .btn-send-icon { display: block !important; }
+  .btn-stop {
+    font-size: 11px !important;
+    width: auto !important;
+    min-width: 52px !important;
+    border-radius: 20px !important;
+    padding: 0 12px !important;
+  }
+}
+
+@media (min-width: 769px) {
+  .mobile-menu-btn { display: none !important; }
 }

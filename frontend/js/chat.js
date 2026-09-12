@@ -665,7 +665,7 @@ function closeSidebar() {
   sidebar.classList.remove("open");
   sidebarOverlay.classList.remove("open");
 }
-hamburgerBtn.addEventListener("click", openSidebar);
+if (hamburgerBtn) hamburgerBtn.addEventListener("click", openSidebar);
 const mobileMenuBtn = document.getElementById("mobile-menu-btn");
 if (mobileMenuBtn) mobileMenuBtn.addEventListener("click", openSidebar);
 sidebarOverlay.addEventListener("click", closeSidebar);
