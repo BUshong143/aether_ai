@@ -35,6 +35,17 @@ const changePwBtn = document.getElementById("change-pw-btn");
 const pwMsg = document.getElementById("pw-msg");
 const deleteAccountBtn = document.getElementById("delete-account-btn");
 const suggestedPrompts = document.getElementById("suggested-prompts");
+const sidebarCollapseBtn = document.getElementById("sidebar-collapse-btn");
+const railExpandBtn = document.getElementById("rail-expand-btn");
+const railNewChat = document.getElementById("rail-new-chat");
+const railChats = document.getElementById("rail-chats");
+const railSettings = document.getElementById("rail-settings");
+const railUser = document.getElementById("rail-user");
+const railUserInitial = document.getElementById("rail-user-initial");
+const userNameEl = document.getElementById("user-name");
+const userAvatarEl = document.getElementById("user-avatar");
+const navChats = document.getElementById("nav-chats");
+
 
 let activeId = null;
 let streaming = false;
@@ -657,6 +668,7 @@ function clearMessages() {
 }
 
 function openSidebar() {
+  sidebar.classList.remove("collapsed");
   sidebar.classList.add("open");
   sidebarOverlay.classList.add("open");
 }
@@ -1313,6 +1325,9 @@ async function init() {
   currentUser = await res.json();
   userEmailEl.textContent = currentUser.email;
   userInitial = (currentUser.name || currentUser.email || "U").trim().charAt(0).toUpperCase();
+  if (userNameEl) userNameEl.textContent = currentUser.name || currentUser.email.split("@")[0] || "User";
+  if (userAvatarEl) userAvatarEl.textContent = userInitial;
+  if (railUserInitial) railUserInitial.textContent = userInitial;
 
   loadingEl.style.display = "none";
   appEl.style.display = "flex";
@@ -1468,5 +1483,60 @@ messagesInner.addEventListener("dblclick", (e) => {
   input.focus();
   input.dispatchEvent(new Event("input"));
 });
+
+// ---------- Sidebar collapse (Workly-style) ----------
+function setSidebarCollapsed(collapsed) {
+  sidebar.classList.toggle("collapsed", collapsed);
+  localStorage.setItem("aether_sidebar_collapsed", collapsed ? "1" : "0");
+}
+if (localStorage.getItem("aether_sidebar_collapsed") === "1" && window.innerWidth > 768) {
+  setSidebarCollapsed(true);
+}
+if (sidebarCollapseBtn) {
+  sidebarCollapseBtn.addEventListener("click", () => setSidebarCollapsed(true));
+}
+if (railExpandBtn) {
+  railExpandBtn.addEventListener("click", () => setSidebarCollapsed(false));
+}
+if (railNewChat) {
+  railNewChat.addEventListener("click", () => {
+    setSidebarCollapsed(false);
+    newChatBtn.click();
+  });
+}
+if (railChats) {
+  railChats.addEventListener("click", () => setSidebarCollapsed(false));
+}
+if (railSettings) {
+  railSettings.addEventListener("click", () => {
+    setSidebarCollapsed(false);
+    openSettings();
+  });
+}
+if (railUser) {
+  railUser.addEventListener("click", () => {
+    setSidebarCollapsed(false);
+    openSettings();
+  });
+}
+if (navChats) {
+  navChats.addEventListener("click", () => {
+    document.querySelectorAll(".nav-item").forEach((el) => el.classList.remove("active"));
+    navChats.classList.add("active");
+  });
+}
+// Highlight Settings nav when opening settings
+const _openSettings = openSettings;
+openSettings = function () {
+  document.querySelectorAll(".nav-item").forEach((el) => el.classList.remove("active"));
+  if (settingsBtn) settingsBtn.classList.add("active");
+  _openSettings();
+};
+const _closeSettings = closeSettings;
+closeSettings = function () {
+  document.querySelectorAll(".nav-item").forEach((el) => el.classList.remove("active"));
+  if (navChats) navChats.classList.add("active");
+  _closeSettings();
+};
 
 init();
