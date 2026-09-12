@@ -6,7 +6,6 @@ import requests
 
 BREVO_API_URL = "https://api.brevo.com/v3/smtp/email"
 
-
 def _send_via_brevo(to_email: str, subject: str, body: str) -> bool:
     api_key = os.getenv("BREVO_API_KEY")
     if not api_key:
@@ -37,7 +36,6 @@ def _send_via_brevo(to_email: str, subject: str, body: str) -> bool:
         print(f"[mailer] Brevo API request failed: {exc}")
         return False
 
-
 def _send_via_smtp(to_email: str, subject: str, body: str) -> bool:
     host = os.getenv("SMTP_HOST")
     port = int(os.getenv("SMTP_PORT", "587"))
@@ -65,7 +63,6 @@ def _send_via_smtp(to_email: str, subject: str, body: str) -> bool:
         print(f"[mailer] Failed to send email via SMTP to {to_email}: {exc}")
         return False
 
-
 def send_email(to_email: str, subject: str, body: str) -> bool:
     """Send a plain-text email.
 
@@ -81,7 +78,6 @@ def send_email(to_email: str, subject: str, body: str) -> bool:
 
     print(f"[mailer] No email provider configured. Would send to {to_email}:\n{subject}\n{body}")
     return True
-
 
 def send_otp_email(to_email: str, otp_code: str) -> bool:
     subject = "Your Aether password reset code"

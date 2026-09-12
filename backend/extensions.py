@@ -6,8 +6,6 @@ db = SQLAlchemy()
 login_manager = LoginManager()
 oauth = OAuth()
 
-# Flask-Limiter is optional so the app still boots if the package isn't
-# installed in a given environment (e.g. a Vercel build that missed it).
 try:
     from flask_limiter import Limiter
     from flask_limiter.util import get_remote_address
@@ -18,7 +16,7 @@ try:
         storage_uri="memory://",
     )
     LIMITER_AVAILABLE = True
-except ImportError:  # pragma: no cover
+except ImportError:
     LIMITER_AVAILABLE = False
 
     class _NoOpLimiter:

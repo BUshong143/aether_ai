@@ -1,23 +1,18 @@
 import io
 import re
 
-
 def slugify(text: str) -> str:
     text = re.sub(r"[^\w\s-]", "", text or "").strip().lower()
     return re.sub(r"[\s_-]+", "-", text) or "document"
-
 
 def _lines(body):
     if body is None:
         return []
     if isinstance(body, list):
-        # Model occasionally sends an array of lines instead of a single
-        # newline-separated string — normalize either shape.
         body = "\n".join(str(item) for item in body)
     else:
         body = str(body)
     return [ln.strip() for ln in body.split("\n") if ln.strip()]
-
 
 def build_docx(title: str, sections: list) -> io.BytesIO:
     from docx import Document
@@ -39,7 +34,6 @@ def build_docx(title: str, sections: list) -> io.BytesIO:
     doc.save(buf)
     buf.seek(0)
     return buf
-
 
 def build_pptx(title: str, sections: list) -> io.BytesIO:
     from pptx import Presentation
@@ -73,7 +67,6 @@ def build_pptx(title: str, sections: list) -> io.BytesIO:
     buf.seek(0)
     return buf
 
-
 def _xml_escape(text) -> str:
     return (
         str(text)
@@ -81,7 +74,6 @@ def _xml_escape(text) -> str:
         .replace("<", "&lt;")
         .replace(">", "&gt;")
     )
-
 
 def build_pdf(title: str, sections: list) -> io.BytesIO:
     from reportlab.lib.pagesizes import letter
@@ -114,7 +106,6 @@ def build_pdf(title: str, sections: list) -> io.BytesIO:
     doc.build(story)
     buf.seek(0)
     return buf
-
 
 BUILDERS = {"docx": build_docx, "pptx": build_pptx, "pdf": build_pdf}
 MIME_TYPES = {

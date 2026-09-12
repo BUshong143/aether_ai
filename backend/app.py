@@ -17,7 +17,6 @@ load_dotenv()
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 FRONTEND_DIR = os.path.join(BASE_DIR, "..", "frontend")
 
-# --- Security: SECRET_KEY must be set. Never fall back to a hardcoded value. ---
 SECRET_KEY = os.getenv("SECRET_KEY")
 if not SECRET_KEY:
     raise RuntimeError(
@@ -34,14 +33,12 @@ app.config["SQLALCHEMY_DATABASE_URI"] = os.getenv("DATABASE_URL")
 app.config["SQLALCHEMY_ENGINE_OPTIONS"] = {"pool_pre_ping": True}
 app.config["SQLALCHEMY_TRACK_MODIFICATIONS"] = False
 
-# Session cookie hardening
 app.config["SESSION_COOKIE_SAMESITE"] = "Lax"
 app.config["SESSION_COOKIE_SECURE"] = IS_PRODUCTION
 app.config["SESSION_COOKIE_HTTPONLY"] = True
 app.config["REMEMBER_COOKIE_SECURE"] = IS_PRODUCTION
 app.config["REMEMBER_COOKIE_HTTPONLY"] = True
 
-# Restrict CORS to the configured frontend origin only
 CORS(
     app,
     supports_credentials=True,
@@ -50,7 +47,6 @@ CORS(
     allow_headers=["Content-Type", "Authorization"],
 )
 
-# Rate limiting (storage in memory is fine for single-process; use Redis in multi-worker prod)
 limiter.init_app(app)
 
 db.init_app(app)
@@ -67,38 +63,30 @@ oauth.register(
     client_kwargs={"scope": "openid email profile"},
 )
 
-
 @login_manager.user_loader
 def load_user(user_id):
     return db.session.get(User, user_id)
-
 
 @login_manager.unauthorized_handler
 def unauthorized():
     return jsonify({"error": "Unauthorized"}), 401
 
-
 @app.errorhandler(429)
 def ratelimit_handler(e):
     return jsonify({"error": "Too many requests. Please try again later."}), 429
 
-
 app.register_blueprint(auth_bp)
 app.register_blueprint(chat_bp)
-
 
 @app.get("/")
 def index():
     return send_from_directory(FRONTEND_DIR, "login.html")
 
-
 @app.get("/<path:filename>")
 def frontend_files(filename):
-    # Prevent path traversal
     if ".." in filename or filename.startswith("/"):
         return jsonify({"error": "Not found"}), 404
     return send_from_directory(FRONTEND_DIR, filename)
-
 
 with app.app_context():
     db.create_all()
@@ -108,8 +96,6 @@ with app.app_context():
         conn.execute(text("ALTER TABLE messages ADD COLUMN IF NOT EXISTS attachments TEXT"))
         conn.commit()
 
-
 if __name__ == "__main__":
-    # debug=False by default in production; only enable explicitly for local
     debug = not IS_PRODUCTION and os.getenv("FLASK_DEBUG", "1") == "1"
     app.run(host="0.0.0.0", port=int(os.getenv("PORT", "5000")), debug=debug, threaded=True)

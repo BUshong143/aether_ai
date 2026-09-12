@@ -9,67 +9,63 @@ from models import Conversation, Message
 
 chat_bp = Blueprint("chat", __name__)
 
-# Reused across requests so we keep a warm, keep-alive HTTPS connection to the
-# Groq endpoint instead of paying a fresh TCP/TLS handshake on every
-# single chat message — this alone shaves meaningful time off time-to-first-token.
 _http_session = requests.Session()
 
-# How many most-recent messages (across both roles) to send as context. Every
-# extra message in the prompt is extra prefill the model has to read before it
-# can start replying, so trimming this keeps time-to-first-token fast even in
-# long-running conversations, while still preserving plenty of recent context.
 MAX_HISTORY_MESSAGES = 14
 
-DEFAULT_MODEL = "openai/gpt-oss-120b"
+DEFAULT_MODEL = "llama-3.3-70b-versatile"
 
-# Curated, currently-active (non-deprecated) Groq models. "vision": True means
-# the model accepts image inputs. "effort": True means it accepts a
-# reasoning_effort ("low" / "medium" / "high") parameter.
 MODEL_CATALOG = [
+    {
+        "id": "llama-3.3-70b-versatile",
+        "label": "Llama 3.3 70B",
+        "description": "Strong all-round model for chat and coding",
+        "vision": False,
+        "effort": False,
+    },
     {
         "id": "openai/gpt-oss-120b",
         "label": "GPT-OSS 120B",
-        "description": "Most capable — best for coding, reasoning, complex tasks",
+        "description": "Most capable — coding, reasoning, complex tasks",
         "vision": False,
         "effort": True,
     },
     {
         "id": "openai/gpt-oss-20b",
         "label": "GPT-OSS 20B",
-        "description": "Fastest — best for everyday chat",
+        "description": "Fast everyday chat",
         "vision": False,
         "effort": True,
     },
     {
-        "id": "qwen/qwen3.6-27b",
-        "label": "Qwen3.6 27B",
-        "description": "Strong reasoning, understands images too",
-        "vision": True,
+        "id": "llama-3.1-8b-instant",
+        "label": "Llama 3.1 8B",
+        "description": "Fastest replies",
+        "vision": False,
         "effort": False,
     },
     {
         "id": "meta-llama/llama-4-scout-17b-16e-instruct",
         "label": "Llama 4 Scout",
-        "description": "Built for image understanding and OCR",
+        "description": "Vision — reads images and screenshots",
         "vision": True,
         "effort": False,
     },
     {
-        "id": "groq/compound",
-        "label": "Compound",
-        "description": "Agentic — can search the web and run code on its own",
-        "vision": False,
+        "id": "meta-llama/llama-4-maverick-17b-128e-instruct",
+        "label": "Llama 4 Maverick",
+        "description": "Vision + stronger reasoning",
+        "vision": True,
         "effort": False,
     },
 ]
 MODEL_BY_ID = {m["id"]: m for m in MODEL_CATALOG}
 VISION_FALLBACK_MODEL = "meta-llama/llama-4-scout-17b-16e-instruct"
+SAFE_TEXT_FALLBACK = "llama-3.3-70b-versatile"
 
-# Groq's own documented caps for image inputs — enforced here too so we fail
-# fast with a clear error instead of letting Groq reject the whole request.
 MAX_IMAGES_PER_MESSAGE = 5
-MAX_IMAGE_BASE64_BYTES = 4 * 1024 * 1024  # 4MB, matches Groq's base64 request limit
-MAX_TEXT_ATTACHMENT_CHARS = 12000  # keeps prompt size (and cost/latency) bounded
+MAX_IMAGE_BASE64_BYTES = 4 * 1024 * 1024
+MAX_TEXT_ATTACHMENT_CHARS = 12000
 
 SYSTEM_PROMPT = (
     "You are Aether, a helpful, concise AI assistant. "
@@ -158,7 +154,6 @@ SYSTEM_PROMPT = (
     "with personal details beyond what's above."
 )
 
-
 @chat_bp.post("/api/generate-document")
 @login_required
 def generate_document():
@@ -194,8 +189,6 @@ def generate_document():
         download_name=f"{slugify(title)}.{fmt}",
     )
 
-
-
 @chat_bp.post("/api/extract-pdf")
 @login_required
 @limiter.limit("20 per minute")
@@ -211,7 +204,7 @@ def extract_pdf():
         import io
         reader = PdfReader(io.BytesIO(f.read()))
         pages = []
-        for i, page in enumerate(reader.pages[:50]):  # cap at 50 pages
+        for i, page in enumerate(reader.pages[:50]):
             try:
                 t = page.extract_text() or ""
             except Exception:
@@ -221,7 +214,6 @@ def extract_pdf():
         text_out = "\n\n".join(pages)
         if not text_out.strip():
             return jsonify({"error": "Could not extract text from this PDF (it may be scanned/image-only)."}), 400
-        # Bound size for the model context
         if len(text_out) > 60000:
             text_out = text_out[:60000] + "\n\n[... truncated ...]"
         return jsonify({"text": text_out, "pages": min(len(reader.pages), 50), "name": f.filename})
@@ -230,7 +222,6 @@ def extract_pdf():
     except Exception as e:
         print(f"[pdf] extract failed: {e}")
         return jsonify({"error": "Failed to read this PDF."}), 500
-
 
 @chat_bp.post("/api/summarize")
 @login_required
@@ -275,12 +266,10 @@ def summarize_conversation():
         print(f"[summarize] {e}")
         return jsonify({"error": "Summarization failed."}), 500
 
-
 @chat_bp.get("/api/models")
 @login_required
 def list_models():
     return jsonify({"models": MODEL_CATALOG, "default": DEFAULT_MODEL})
-
 
 @chat_bp.get("/api/conversations")
 @login_required
@@ -291,7 +280,6 @@ def list_conversations():
         .all()
     )
     return jsonify([c.to_summary_dict() for c in conversations])
-
 
 @chat_bp.get("/api/conversations/<conversation_id>")
 @login_required
@@ -307,7 +295,6 @@ def get_conversation(conversation_id):
         }
     )
 
-
 @chat_bp.delete("/api/conversations/<conversation_id>")
 @login_required
 def delete_conversation(conversation_id):
@@ -317,7 +304,6 @@ def delete_conversation(conversation_id):
     db.session.delete(convo)
     db.session.commit()
     return jsonify({"ok": True})
-
 
 @chat_bp.patch("/api/conversations/<conversation_id>")
 @login_required
@@ -336,7 +322,6 @@ def rename_conversation(conversation_id):
     db.session.commit()
     return jsonify(convo.to_summary_dict())
 
-
 @chat_bp.get("/api/conversations/search")
 @login_required
 @limiter.limit("30 per minute")
@@ -344,7 +329,6 @@ def search_conversations():
     q = (request.args.get("q") or "").strip()
     if not q or len(q) < 2:
         return jsonify([])
-    # Search by title first, then by message content (limited)
     from sqlalchemy import or_
     title_matches = (
         Conversation.query.filter_by(user_id=current_user.id)
@@ -354,7 +338,6 @@ def search_conversations():
         .all()
     )
     seen = {c.id for c in title_matches}
-    # Also search recent messages
     msg_matches = (
         Message.query.join(Conversation)
         .filter(Conversation.user_id == current_user.id)
@@ -374,7 +357,6 @@ def search_conversations():
     results.sort(key=lambda c: c.updated_at or c.created_at, reverse=True)
     return jsonify([c.to_summary_dict() for c in results[:20]])
 
-
 @chat_bp.post("/api/chat")
 @login_required
 @limiter.limit("30 per minute")
@@ -392,7 +374,6 @@ def chat():
     if not message and not attachments:
         return jsonify({"error": "Message is required"}), 400
 
-    # --- Validate + split attachments into images vs. text files ---
     images = [a for a in attachments if a.get("kind") == "image"]
     text_files = [a for a in attachments if a.get("kind") == "file"]
 
@@ -404,22 +385,28 @@ def chat():
         if len(data_url) > MAX_IMAGE_BASE64_BYTES:
             return jsonify({"error": f"'{img.get('name', 'image')}' is too large (max 4MB)."}), 400
 
-    # Text-file contents get inlined into the prompt as fenced blocks so the
-    # model can actually read them — Groq has no separate "file" input type.
     augmented_text = message
     for f in text_files:
         excerpt = (f.get("text") or "")[:MAX_TEXT_ATTACHMENT_CHARS]
         augmented_text += f"\n\n[Attached file: {f.get('name', 'file')}]\n```\n{excerpt}\n```"
     augmented_text = augmented_text.strip() or "(see attached file)"
 
-    # Images require a vision-capable model — silently use one for this
-    # request if the selected model can't see images, rather than erroring.
     resolved_model = requested_model
-    if images and not MODEL_BY_ID[requested_model]["vision"]:
-        resolved_model = VISION_FALLBACK_MODEL
+    if images:
+        # Images require a vision model — always switch (GPT-OSS cannot see screenshots)
+        if not MODEL_BY_ID.get(requested_model, {}).get("vision"):
+            resolved_model = VISION_FALLBACK_MODEL
+        # Cap image payload size further for API reliability
+        for img in images:
+            data_url = img.get("dataUrl") or ""
+            if len(data_url) > MAX_IMAGE_BASE64_BYTES:
+                return jsonify({"error": f"Image '{img.get('name', 'file')}' is too large (max ~3MB). Try a smaller screenshot."}), 400
+
+    if resolved_model not in MODEL_BY_ID:
+        resolved_model = SAFE_TEXT_FALLBACK if not images else VISION_FALLBACK_MODEL
 
     effort = requested_effort if requested_effort in ("low", "medium", "high") else None
-    use_effort = effort and MODEL_BY_ID[resolved_model]["effort"]
+    use_effort = bool(effort and MODEL_BY_ID.get(resolved_model, {}).get("effort"))
 
     convo = None
     if conversation_id:
@@ -429,7 +416,7 @@ def chat():
     if is_new_convo:
         convo = Conversation(user_id=current_user.id, title=(message or text_files[0].get("name") or images[0].get("name") or "New conversation")[:60])
         db.session.add(convo)
-        db.session.flush()  # assigns convo.id without a network round-trip commit
+        db.session.flush()
 
     user_msg = Message(
         conversation_id=convo.id,
@@ -438,11 +425,8 @@ def chat():
         attachments=json.dumps(attachments) if attachments else None,
     )
     db.session.add(user_msg)
-    db.session.commit()  # one commit covers both the new conversation and the message
+    db.session.commit()
 
-    # Build the Groq-bound content for this turn. Images use OpenAI/Groq's
-    # multimodal content-array format; plain text stays a simple string
-    # (smaller payload, and matches what every earlier history message uses).
     if images:
         last_user_content = [{"type": "text", "text": augmented_text}]
         for img in images:
@@ -489,14 +473,18 @@ def chat():
                 stream=True,
                 timeout=120,
             )
-            resp.encoding = "utf-8"  # Groq's SSE stream doesn't declare a charset, and requests
-            # defaults to ISO-8859-1 for text/event-stream without one — without this, any
-            # multi-byte UTF-8 character (emoji, curly quotes, "…") comes out as mojibake.
+            resp.encoding = "utf-8"
 
             if resp.status_code >= 400:
                 error_body = resp.text[:500]
                 print(f"[chat] Groq API error {resp.status_code}: {error_body}")
-                friendly = f"[Model error {resp.status_code}. Check the backend terminal for details.]"
+                friendly = (
+                    f"[Model error {resp.status_code}"
+                    + (": invalid GROQ_API_KEY]" if resp.status_code == 401
+                       else ": model not found — try Llama 3.3 70B or Llama 4 Scout for images]"
+                       if resp.status_code == 404
+                       else f". {error_body[:120]}]")
+                )
                 full_reply.append(friendly)
                 yield f"event: token\ndata: {json.dumps({'delta': friendly})}\n\n"
             else:
@@ -535,8 +523,6 @@ def chat():
         finally:
             reply_text = "".join(full_reply)
             if reply_text.strip():
-                # The request context is gone by the time this generator resumes,
-                # so we push a fresh app context using the app captured earlier.
                 with real_app.app_context():
                     assistant_msg = Message(
                         conversation_id=convo_id, role="assistant", content=reply_text

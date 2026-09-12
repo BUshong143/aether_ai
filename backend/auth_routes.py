@@ -16,17 +16,13 @@ auth_bp = Blueprint("auth", __name__)
 OTP_TTL_MINUTES = 10
 MAX_OTP_ATTEMPTS = 5
 
-
 def _hash_code(code: str) -> str:
     return hashlib.sha256(code.encode()).hexdigest()
-
 
 def _generate_otp() -> str:
     return f"{secrets.randbelow(1_000_000):06d}"
 
-
 SPECIAL_CHARS = set("!@#$%^&*()_+-=[]{}|;:'\",.<>/?`~\\")
-
 
 def _password_strength_error(password: str) -> str | None:
     """Returns a human-readable error if the password is too weak, else None."""
@@ -41,7 +37,6 @@ def _password_strength_error(password: str) -> str | None:
     if not any(c in SPECIAL_CHARS for c in password):
         return "Password must include at least one special character."
     return None
-
 
 @auth_bp.post("/api/register")
 @limiter.limit("5 per minute")
@@ -73,7 +68,6 @@ def register():
     login_user(user, remember=True)
     return jsonify(user.to_public_dict()), 201
 
-
 @auth_bp.post("/api/login")
 @limiter.limit("10 per minute")
 @limiter.limit("40 per hour")
@@ -92,7 +86,6 @@ def login():
     login_user(user, remember=True)
     return jsonify(user.to_public_dict())
 
-
 @auth_bp.post("/api/forgot-password")
 @limiter.limit("3 per minute")
 @limiter.limit("10 per hour")
@@ -107,7 +100,6 @@ def forgot_password():
 
     user = User.query.filter_by(email=email).first()
     if not user:
-        # Don't reveal whether the account exists.
         return generic_ok
 
     otp_code = _generate_otp()
@@ -121,7 +113,6 @@ def forgot_password():
 
     send_otp_email(user.email, otp_code)
     return generic_ok
-
 
 @auth_bp.post("/api/verify-otp")
 @limiter.limit("10 per minute")
@@ -160,7 +151,6 @@ def verify_otp():
     db.session.commit()
 
     return jsonify({"ok": True, "resetToken": reset_token})
-
 
 @auth_bp.post("/api/reset-password")
 @limiter.limit("5 per minute")
@@ -201,20 +191,17 @@ def reset_password():
 
     return jsonify({"ok": True})
 
-
 @auth_bp.post("/api/logout")
 @login_required
 def logout():
     logout_user()
     return jsonify({"ok": True})
 
-
 @auth_bp.get("/api/me")
 def me():
     if not current_user.is_authenticated:
         return jsonify({"error": "Unauthorized"}), 401
     return jsonify(current_user.to_public_dict())
-
 
 @auth_bp.patch("/api/me")
 @login_required
@@ -229,7 +216,6 @@ def update_profile():
         current_user.name = name
     db.session.commit()
     return jsonify(current_user.to_public_dict())
-
 
 @auth_bp.post("/api/change-password")
 @login_required
@@ -253,7 +239,6 @@ def change_password():
     db.session.commit()
     return jsonify({"ok": True})
 
-
 @auth_bp.delete("/api/me")
 @login_required
 @limiter.limit("3 per hour")
@@ -261,23 +246,16 @@ def delete_account():
     """Permanently delete the current user and all their data."""
     user = current_user
     logout_user()
-    # Cascade deletes conversations + messages via relationship
     db.session.delete(user)
     db.session.commit()
     return jsonify({"ok": True})
 
-
-# --- Google OAuth ---
-
 @auth_bp.get("/auth/google")
 @limiter.limit("20 per minute")
 def google_login():
-    # Force the redirect_uri to match FRONTEND_URL exactly, instead of deriving
-    # it from the incoming request's Host header (url_for(..., _external=True)).
     frontend_url = os.getenv("FRONTEND_URL", "http://localhost:5000").rstrip("/")
     redirect_uri = f"{frontend_url}/auth/google/callback"
     return oauth.google.authorize_redirect(redirect_uri)
-
 
 @auth_bp.get("/auth/google/callback")
 def google_callback():
@@ -295,7 +273,6 @@ def google_callback():
 
     user = User.query.filter_by(google_id=google_id).first()
     if not user:
-        # Link to an existing email/password account if one exists, else create new
         user = User.query.filter_by(email=email).first()
         if user:
             user.google_id = google_id

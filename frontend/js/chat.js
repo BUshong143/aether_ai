@@ -19,7 +19,7 @@ const modelPicker = document.getElementById("model-picker");
 const modelPickerBtn = document.getElementById("model-picker-btn");
 const modelPickerLabel = document.getElementById("model-picker-label");
 const modelPickerMenu = document.getElementById("model-picker-menu");
-const stopBtn = document.getElementById("stop-btn");
+const stopBtn = document.getElementById("stop-btn"); // optional, may be null
 const convoSearch = document.getElementById("convo-search");
 const settingsBtn = document.getElementById("settings-btn");
 const settingsPanel = document.getElementById("settings-panel");
@@ -982,20 +982,16 @@ sendBtn.addEventListener("click", sendMessage);
 
 function setStreamingUI(on) {
   streaming = on;
-  sendBtn.style.display = on ? "none" : "";
-  stopBtn.style.display = on ? "" : "none";
-  sendBtn.disabled = on;
+  if (sendBtn) {
+    sendBtn.style.display = "";
+    sendBtn.disabled = on;
+  }
+  if (stopBtn) stopBtn.style.display = "none";
   if (!on) {
     abortController = null;
   }
 }
 
-stopBtn.addEventListener("click", () => {
-  if (abortController) {
-    abortController.abort();
-  }
-  setStreamingUI(false);
-});
 
 if (suggestedPrompts) {
   suggestedPrompts.addEventListener("click", (e) => {
