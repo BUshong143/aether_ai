@@ -13,7 +13,7 @@ _http_session = requests.Session()
 
 MAX_HISTORY_MESSAGES = 14
 
-DEFAULT_MODEL = "llama-3.3-70b-versatile"
+DEFAULT_MODEL = "llama-3.1-8b-instant"
 
 MODEL_CATALOG = [
     {
@@ -67,7 +67,7 @@ MODEL_CATALOG = [
 ]
 MODEL_BY_ID = {m["id"]: m for m in MODEL_CATALOG}
 VISION_FALLBACK_MODEL = "meta-llama/llama-4-scout-17b-16e-instruct"
-SAFE_TEXT_FALLBACK = "llama-3.3-70b-versatile"
+SAFE_TEXT_FALLBACK = "llama-3.1-8b-instant"
 
 MAX_IMAGES_PER_MESSAGE = 5
 MAX_IMAGE_BASE64_BYTES = 4 * 1024 * 1024
@@ -413,6 +413,10 @@ def chat():
 
     effort = requested_effort if requested_effort in ("low", "medium", "high") else None
     use_effort = bool(effort and MODEL_BY_ID.get(resolved_model, {}).get("effort"))
+    # Prefer widely available Groq IDs; fall back if catalog entry is missing
+    if resolved_model not in MODEL_BY_ID:
+        resolved_model = VISION_FALLBACK_MODEL if images else SAFE_TEXT_FALLBACK
+
 
     convo = None
     if conversation_id:
@@ -482,17 +486,35 @@ def chat():
             resp.encoding = "utf-8"
 
             if resp.status_code >= 400:
-                error_body = resp.text[:500]
-                print(f"[chat] Groq API error {resp.status_code}: {error_body}")
-                friendly = (
-                    f"[Model error {resp.status_code}"
-                    + (": invalid GROQ_API_KEY]" if resp.status_code == 401
-                       else ": model not found — try Llama 3.3 70B or Llama 4 Scout for images]"
-                       if resp.status_code == 404
-                       else f". {error_body[:120]}]")
-                )
-                full_reply.append(friendly)
-                yield f"event: token\ndata: {json.dumps({'delta': friendly})}\n\n"
+                error_body = resp.text[:800]
+                print(f"[chat] Groq API error {resp.status_code} model={payload.get('model')}: {error_body}")
+                if resp.status_code == 404 and payload.get("model") != SAFE_TEXT_FALLBACK:
+                    payload["model"] = SAFE_TEXT_FALLBACK
+                    payload.pop("reasoning_effort", None)
+                    print(f"[chat] retrying with {SAFE_TEXT_FALLBACK}")
+                    resp = _http_session.post(
+                        f"{os.getenv('GROQ_BASE_URL', 'https://api.groq.com/openai/v1')}/chat/completions",
+                        headers={
+                            "Authorization": f"Bearer {os.getenv('GROQ_API_KEY')}",
+                            "Content-Type": "application/json",
+                            "Accept": "text/event-stream",
+                        },
+                        json=payload,
+                        stream=True,
+                        timeout=120,
+                    )
+                    resp.encoding = "utf-8"
+                if resp.status_code >= 400:
+                    error_body = resp.text[:800]
+                    print(f"[chat] Groq still failing {resp.status_code}: {error_body}")
+                    if resp.status_code == 401:
+                        friendly = "[Model error: invalid or missing GROQ_API_KEY on the server.]"
+                    elif resp.status_code == 404:
+                        friendly = "[Model error 404: no available Groq model for this key. Check GROQ_API_KEY / model access.]"
+                    else:
+                        friendly = f"[Model error {resp.status_code}. {error_body[:120]}]"
+                    full_reply.append(friendly)
+                    yield f"event: token\ndata: {json.dumps({'delta': friendly})}\n\n"
             else:
                 for raw_line in resp.iter_lines(decode_unicode=True, chunk_size=1024):
                     if not raw_line or not raw_line.startswith("data:"):

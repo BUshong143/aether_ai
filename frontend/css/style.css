@@ -2139,39 +2139,113 @@ html[data-theme="light"] .model-picker-item {
   color: #1a1a22;
 }
 
-.loading-atom {
-  width: 80px;
-  height: 80px;
-  background: transparent;
-  animation: atom-float 2.4s ease-in-out infinite;
-}
-.loading-atom svg {
-  display: block;
-  width: 80px;
-  height: 80px;
-  overflow: visible;
-}
+
+
 .loading-atom .spin-a,
 .loading-atom .spin-b,
-.loading-atom .spin-c {
-  transform-origin: 60px 60px;
-}
-.loading-atom .spin-a { animation: atom-spin 2.8s linear infinite; }
-.loading-atom .spin-b { animation: atom-spin 4s linear infinite reverse; }
-.loading-atom .spin-c { animation: atom-spin 5.2s linear infinite; }
-.loading-atom .core {
-  transform-origin: 60px 60px;
-  animation: atom-core 1.5s ease-in-out infinite;
-}
-@keyframes atom-spin {
-  from { transform: rotate(0deg); }
+
+
+
+
+
+
   to { transform: rotate(360deg); }
 }
-@keyframes atom-core {
-  0%, 100% { transform: scale(1); }
+
   50% { transform: scale(1.12); }
 }
-@keyframes atom-float {
-  0%, 100% { transform: translateY(0); }
+
   50% { transform: translateY(-6px); }
+}
+
+
+/* ===== Loading: static atomic icon, soft pulse only ===== */
+.loading-screen {
+  position: fixed;
+  inset: 0;
+  z-index: 200;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: #0e0e14;
+}
+.loading-atom {
+  width: 72px;
+  height: 72px;
+  object-fit: contain;
+  background: transparent !important;
+  animation: atom-pulse 1.5s ease-in-out infinite;
+}
+@keyframes atom-pulse {
+  0%, 100% { opacity: 0.45; transform: scale(0.9); }
+  50% { opacity: 1; transform: scale(1); }
+}
+
+/* ===== Mobile: never desktop rail / desktop chrome ===== */
+@media (max-width: 768px) {
+  .sidebar-rail,
+  .sidebar.collapsed .sidebar-rail,
+  #sidebar-rail {
+    display: none !important;
+    width: 0 !important;
+    min-width: 0 !important;
+    overflow: hidden !important;
+  }
+
+  .sidebar,
+  .sidebar.collapsed {
+    position: fixed !important;
+    top: 0;
+    left: 0;
+    bottom: 0;
+    width: min(300px, 88vw) !important;
+    max-width: 300px !important;
+    transform: translateX(-100%);
+    transition: transform 0.22s ease;
+    z-index: 50;
+    border-right: 1px solid var(--line);
+  }
+  .sidebar.open {
+    transform: translateX(0) !important;
+  }
+  .sidebar .sidebar-panel {
+    display: flex !important;
+    width: 100% !important;
+  }
+  .sidebar-collapse-btn {
+    display: none !important;
+  }
+
+  .app {
+    display: flex !important;
+  }
+  .chat-main {
+    width: 100% !important;
+    max-width: 100% !important;
+    margin: 0 !important;
+  }
+
+  .mobile-menu-btn {
+    display: flex !important;
+  }
+
+  .chat-topbar {
+    display: none !important;
+  }
+
+  /* Full-width messages, no desktop max constraints feeling cramped */
+  .messages-wrap {
+    padding: 56px 12px 16px !important;
+  }
+  .messages-inner {
+    max-width: 100% !important;
+  }
+  .composer-inner-wrap,
+  .composer-inner {
+    max-width: 100% !important;
+  }
+
+  .bubble {
+    max-width: 88% !important;
+  }
 }

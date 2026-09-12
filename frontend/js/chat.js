@@ -1500,6 +1500,10 @@ function setSidebarCollapsed(collapsed) {
 }
 if (localStorage.getItem("aether_sidebar_collapsed") === "1" && window.innerWidth > 768) {
   setSidebarCollapsed(true);
+} else if (window.innerWidth <= 768) {
+  // Mobile is always a drawer — never the desktop icon rail
+  sidebar.classList.remove("collapsed");
+  sidebar.classList.remove("open");
 }
 if (sidebarCollapseBtn) {
   sidebarCollapseBtn.addEventListener("click", () => setSidebarCollapsed(true));
@@ -1549,3 +1553,9 @@ closeSettings = function () {
 };
 
 init();
+
+window.addEventListener("resize", () => {
+  if (window.innerWidth <= 768) {
+    sidebar.classList.remove("collapsed");
+  }
+});
